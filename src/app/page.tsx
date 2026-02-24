@@ -1,48 +1,455 @@
-import Link from "next/link";
+"use client";
+
+import React, { useEffect, useState } from "react";
 
 export default function Home() {
+  const [showIntro, setShowIntro] = useState(true);
+  const [name, setName] = useState("");
+  const [tournamentPlayers, setTournamentPlayers] = useState<string[]>([]);
+  const [socialPlayers, setSocialPlayers] = useState<string[]>([]);
+  const [showRules, setShowRules] = useState(false);
+  const [playMode, setPlayMode] = useState<"social" | "tournament" | null>(
+    null,
+  );
+
+  // Intro timing
+  useEffect(() => {
+    const timer = setTimeout(() => setShowIntro(false), 2600);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Load saved state (players + play mode)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const storedTournament = window.localStorage.getItem(
+        "lawx-padel-tournament-players",
+      );
+      const storedSocial = window.localStorage.getItem(
+        "lawx-padel-social-players",
+      );
+      const storedMode = window.localStorage.getItem("lawx-padel-play-mode");
+      if (storedTournament) {
+        const parsed = JSON.parse(storedTournament);
+        if (Array.isArray(parsed)) {
+          setTournamentPlayers(parsed.filter((p) => typeof p === "string"));
+        }
+      }
+      if (storedSocial) {
+        const parsed = JSON.parse(storedSocial);
+        if (Array.isArray(parsed)) {
+          setSocialPlayers(parsed.filter((p) => typeof p === "string"));
+        }
+      }
+      if (storedMode === "social" || storedMode === "tournament") {
+        setPlayMode(storedMode);
+      }
+    } catch {
+      // ignore bad localStorage data
+    }
+  }, []);
+
+  // Persist players + mode whenever they change
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        "lawx-padel-tournament-players",
+        JSON.stringify(tournamentPlayers),
+      );
+      window.localStorage.setItem(
+        "lawx-padel-social-players",
+        JSON.stringify(socialPlayers),
+      );
+      if (playMode) {
+        window.localStorage.setItem("lawx-padel-play-mode", playMode);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [tournamentPlayers, socialPlayers, playMode]);
+
+  function handleAddPlayer() {
+    const trimmed = name.trim();
+    if (!trimmed || !playMode) return;
+
+    if (playMode === "tournament") {
+      setTournamentPlayers((prev) =>
+        prev.includes(trimmed) ? prev : [...prev, trimmed],
+      );
+    } else {
+      setSocialPlayers((prev) =>
+        prev.includes(trimmed) ? prev : [...prev, trimmed],
+      );
+    }
+
+    setName("");
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddPlayer();
+    }
+  }
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-8">
-      <div>
-        <h2 className="text-2xl font-semibold text-center border p-4 font-mono rounded-md">
-          Get started by choosing a template path from the /paths/ folder.
-        </h2>
+    <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-50">
+      {/* Background gradients & glow */}
+      <div
+        className="pointer-events-none fixed inset-0 opacity-60"
+        aria-hidden="true"
+      >
+        <div className="absolute -left-40 top-[-10rem] h-96 w-96 rounded-full bg-gradient-to-br from-emerald-500/40 via-cyan-400/20 to-transparent blur-3xl" />
+        <div className="absolute bottom-[-10rem] right-[-6rem] h-[22rem] w-[22rem] rounded-full bg-gradient-to-tr from-blue-700/40 via-indigo-500/30 to-fuchsia-500/20 blur-3xl" />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.28) 1px, transparent 0)",
+            backgroundSize: "22px 22px",
+          }}
+        />
       </div>
-      <div>
-        <h1 className="text-6xl font-bold text-center">Make anything you imagine 🪄</h1>
-        <h2 className="text-2xl text-center font-light text-gray-500 pt-4">
-          This whole page will be replaced when you run your template path.
-        </h2>
+
+      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 py-10 md:px-8">
+        {/* Neon frame */}
+        <div className="relative w-full max-w-3xl rounded-[2rem] border border-slate-800/80 bg-slate-950/70 px-6 py-8 shadow-[0_28px_90px_rgba(15,23,42,1)] backdrop-blur-2xl md:px-10 md:py-10">
+          <div className="pointer-events-none absolute inset-x-10 top-0 h-28 bg-gradient-to-b from-emerald-400/30 via-cyan-400/10 to-transparent blur-3xl" />
+          <div className="pointer-events-none absolute inset-x-10 bottom-0 h-24 bg-gradient-to-t from-indigo-500/35 via-fuchsia-500/10 to-transparent blur-3xl" />
+
+          {/* Top pill / meta + rules */}
+          <div className="relative mb-6 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-300/80">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 shadow-[0_0_22px_rgba(16,185,129,0.5)]">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.9)]" />
+              <span className="font-semibold tracking-[0.18em] uppercase text-emerald-100">
+                Live Bracket
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-slate-400">
+              <button
+                type="button"
+                onClick={() => setShowRules(true)}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-400/60 bg-slate-900/90 px-3 py-1.5 text-[11px] font-medium text-emerald-100 shadow-[0_0_24px_rgba(34,197,94,0.65)] transition hover:border-emerald-300 hover:bg-emerald-500/15"
+              >
+                <span className="relative flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 via-cyan-400 to-sky-400">
+                  {/* Padel racket icon */}
+                  <svg
+                    viewBox="0 0 32 32"
+                    aria-hidden="true"
+                    className="h-4 w-4 text-slate-950"
+                  >
+                    <defs>
+                      <pattern
+                        id="padel-dots"
+                        x="0"
+                        y="0"
+                        width="4"
+                        height="4"
+                        patternUnits="userSpaceOnUse"
+                      >
+                        <circle cx="1" cy="1" r="0.6" fill="currentColor" />
+                      </pattern>
+                    </defs>
+                    {/* Head */}
+                    <path
+                      d="M20.5 4.5c-3-3-7.9-3-10.9 0-3 3-3 7.8 0 10.8 1.3 1.3 2.9 2.1 4.6 2.4l2.9 4.3c.3.4.9.5 1.3.2l1.8-1.3c.4-.3.5-.9.2-1.3l-2.8-4.2c.3-1.7 1.1-3.3 2.4-4.6 3-3 3-7.8 0-10.8Z"
+                      fill="url(#padel-dots)"
+                      stroke="currentColor"
+                      strokeWidth="1.3"
+                    />
+                    {/* Handle */}
+                    <path
+                      d="M15.7 18.6 12.8 22c-.4.5-.4 1.2.1 1.6l1.9 1.8c.5.5 1.3.4 1.7-.1l2.7-3.4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span className="uppercase tracking-[0.18em]">Padel Rules</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Intro -> Form transition */}
+          <div className="relative">
+            {/* Intro title */}
+            <div
+              className={`absolute inset-0 flex flex-col items-center justify-center gap-4 text-center transition-all duration-700 ${
+                showIntro
+                  ? "opacity-100 translate-y-0 scale-100"
+                  : "pointer-events-none translate-y-4 scale-95 opacity-0"
+              }`}
+            >
+              <h1 className="bg-gradient-to-br from-emerald-300 via-cyan-200 to-sky-400 bg-clip-text text-4xl font-black leading-tight text-transparent drop-shadow-[0_0_25px_rgba(34,197,94,0.4)] md:text-5xl">
+                Law X Padel Tournament
+              </h1>
+            </div>
+
+            {/* Form + players list */}
+            <div
+              className={`flex flex-col gap-6 transition-all duration-700 ${
+                showIntro
+                  ? "pointer-events-none -translate-y-4 opacity-0"
+                  : "translate-y-0 opacity-100"
+              }`}
+            >
+              {/* Choice of play */}
+              <div className="mt-4 rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4">
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200/80">
+                    Choice of play today
+                  </p>
+                  <p className="text-[11px] text-slate-300/90">
+                    Once the tournament has started, you cannot switch between.
+                  </p>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setPlayMode("social")}
+                    className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-left text-xs md:text-sm ${
+                      playMode === "social"
+                        ? "border-emerald-400/80 bg-emerald-500/15 shadow-[0_0_25px_rgba(34,197,94,0.6)]"
+                        : "border-slate-700/80 bg-slate-900/80 hover:border-emerald-400/60 hover:bg-emerald-500/10"
+                    }`}
+                  >
+                    <span
+                      className={`mt-1 inline-flex h-3 w-3 items-center justify-center rounded-full border ${
+                        playMode === "social"
+                          ? "border-emerald-300 bg-emerald-400"
+                          : "border-slate-500"
+                      }`}
+                    />
+                    <span className="text-slate-100">
+                      I am just here to play socially
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlayMode("tournament")}
+                    className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-left text-xs md:text-sm ${
+                      playMode === "tournament"
+                        ? "border-emerald-400/80 bg-emerald-500/15 shadow-[0_0_25px_rgba(34,197,94,0.6)]"
+                        : "border-slate-700/80 bg-slate-900/80 hover:border-emerald-400/60 hover:bg-emerald-500/10"
+                    }`}
+                  >
+                    <span
+                      className={`mt-1 inline-flex h-3 w-3 items-center justify-center rounded-full border ${
+                        playMode === "tournament"
+                          ? "border-emerald-300 bg-emerald-400"
+                          : "border-slate-500"
+                      }`}
+                    />
+                    <span className="text-slate-100">
+                      I am here to play in the tournament
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200/80">
+                  Join the court
+                </p>
+                <p className="mt-1 text-sm text-slate-300/95">
+                  Put your name in and once everyone is in, we will assign courts.
+                </p>
+              </div>
+
+              <div className="mt-1 flex flex-col gap-4 md:flex-row md:items-center">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 rounded-2xl border border-emerald-400/50 bg-gradient-to-r from-emerald-500/15 via-slate-900/90 to-cyan-500/10 px-4 py-3 shadow-[0_0_0_1px_rgba(74,222,128,0.35)]">
+                    <div className="hidden h-8 items-center rounded-full border border-emerald-300/70 bg-emerald-500/15 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100 shadow-sm md:inline-flex">
+                      Player
+                    </div>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Type your name and hit Add player…"
+                      className="flex-1 bg-transparent text-sm text-slate-50 placeholder:text-emerald-100/70 focus:outline-none md:text-base"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddPlayer}
+                      disabled={!name.trim()}
+                      className="flex h-9 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 via-cyan-400 to-sky-400 px-4 text-xs font-semibold text-slate-950 shadow-[0_0_20px_rgba(34,197,94,0.85)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 md:h-10 md:px-5"
+                    >
+                      Add player
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-emerald-100/85">
+                    Press{" "}
+                    <span className="rounded border border-emerald-200/70 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold">
+                      Enter
+                    </span>{" "}
+                    to quickly add yourself to the list.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                      Players…
+                    </p>
+                    <p className="mt-1 text-xs text-slate-300/90 md:text-sm">
+                      We&apos;ll auto-stack the lineup as names come in.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                    <span className="rounded-full border border-slate-700/80 bg-slate-900/80 px-2 py-0.5">
+                      Total: {tournamentPlayers.length + socialPlayers.length}
+                    </span>
+                  </div>
+                </div>
+
+                {tournamentPlayers.length === 0 && socialPlayers.length === 0 ? (
+                  <div className="flex items-center justify-between rounded-xl border border-dashed border-slate-700/80 bg-slate-900/70 px-3 py-3 text-xs text-slate-400 md:px-4">
+                    <span>
+                      No players yet. Be the first name glowing on the wall.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/85">
+                        Tournament
+                      </p>
+                      {tournamentPlayers.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400">
+                          No tournament names yet.
+                        </p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {tournamentPlayers.map((player, index) => (
+                            <li
+                              key={player}
+                              className="group flex items-center justify-between rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 px-3 py-2 text-sm text-slate-100 shadow-[0_10px_35px_rgba(15,23,42,0.9)]"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/70 to-cyan-400/70 text-[11px] font-bold text-slate-950 shadow-[0_0_16px_rgba(52,211,153,0.9)]">
+                                  {index + 1}
+                                </span>
+                                <span className="font-medium tracking-tight">
+                                  {player}
+                                </span>
+                              </div>
+                              <span className="text-[10px] uppercase tracking-[0.18em] text-emerald-300/80">
+                                Ready
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300/85">
+                        Social play
+                      </p>
+                      {socialPlayers.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400">
+                          No social-play names yet.
+                        </p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {socialPlayers.map((player, index) => (
+                            <li
+                              key={player}
+                              className="group flex items-center justify-between rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 px-3 py-2 text-sm text-slate-100 shadow-[0_10px_35px_rgba(15,23,42,0.9)]"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-slate-500/80 to-slate-300/80 text-[11px] font-bold text-slate-950 shadow-[0_0_16px_rgba(148,163,184,0.9)]">
+                                  {index + 1}
+                                </span>
+                                <span className="font-medium tracking-tight">
+                                  {player}
+                                </span>
+                              </div>
+                              <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/80">
+                                Social
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="border rounded-lg p-6 hover:bg-gray-100 transition-colors">
-          <h3 className="text-xl font-semibold">AI Chat App</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            An intelligent conversational app powered by AI models, featuring real-time responses
-            and seamless integration with Next.js and various AI providers.
-          </p>
+
+      {showRules && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70 px-4">
+          <div className="max-h-[80vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-emerald-500/40 bg-slate-950/95 shadow-[0_30px_120px_rgba(15,23,42,1)] backdrop-blur-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-300/90">
+                  Padel Rules
+                </p>
+                <p className="text-xs text-slate-300/90">
+                  Super simple, match-day friendly version.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRules(false)}
+                className="rounded-full border border-slate-700/80 bg-slate-900/90 px-3 py-1 text-[11px] text-slate-200 hover:border-slate-300 hover:bg-slate-800"
+              >
+                Close
+              </button>
+            </div>
+            <div className="grid gap-6 px-5 py-5 text-sm text-slate-100 md:grid-cols-3">
+              <div>
+                <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300/90">
+                  Scoring points
+                </h2>
+                <ul className="mt-3 space-y-2 text-[13px] text-slate-200/90">
+                  <li>· Same scoring as tennis: 15, 30, 40, game.</li>
+                  <li>· First to 6 games, win by 2, wins the set.</li>
+                  <li>· At 40–40 (deuce) you must win two points in a row.</li>
+                  <li>· Match is usually best of 3 sets.</li>
+                  <li>· You win a point when the ball bounces twice on the other side or they hit the net/wall first.</li>
+                </ul>
+              </div>
+              <div>
+                <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300/90">
+                  In‑play rules
+                </h2>
+                <ul className="mt-3 space-y-2 text-[13px] text-slate-200/90">
+                  <li>· Ball must bounce once on the ground before it can hit any wall.</li>
+                  <li>· You can hit the ball off your own glass wall, but not into your own fence.</li>
+                  <li>· You may volley (hit in the air) on any shot after the return of serve.</li>
+                  <li>· Ball is out if it hits the wall or fence on the opponent&apos;s side before the ground.</li>
+                  <li>· Net touch or hitting the ball twice in one swing loses the point.</li>
+                </ul>
+              </div>
+              <div>
+                <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300/90">
+                  Serve rules
+                </h2>
+                <ul className="mt-3 space-y-2 text-[13px] text-slate-200/90">
+                  <li>· Under‑arm serve only: drop the ball and hit it below waist height.</li>
+                  <li>· Serve diagonally into the opposite service box.</li>
+                  <li>· The ball may hit the side or back glass after landing in the box and still be in, but not the fence on the serve.</li>
+                  <li>· If the ball hits the net and still lands in the correct box, repeat the serve (let).</li>
+                  <li>· You get two serve attempts; miss both and you lose the point.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="border rounded-lg p-6 hover:bg-gray-100 transition-colors">
-          <h3 className="text-xl font-semibold">AI Image Generation App</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            Create images from text prompts using AI, powered by the Replicate API and Next.js.
-          </p>
-        </div>
-        <div className="border rounded-lg p-6 hover:bg-gray-100 transition-colors">
-          <h3 className="text-xl font-semibold">Social Media App</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            A feature-rich social platform with user profiles, posts, and interactions using
-            Firebase and Next.js.
-          </p>
-        </div>
-        <div className="border rounded-lg p-6 hover:bg-gray-100 transition-colors">
-          <h3 className="text-xl font-semibold">Voice Notes App</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            A voice-based note-taking app with real-time transcription using Deepgram API, 
-            Firebase integration for storage, and a clean, simple interface built with Next.js.
-          </p>
-        </div>
-      </div>
+      )}
     </main>
   );
 }
