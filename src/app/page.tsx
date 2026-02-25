@@ -36,11 +36,7 @@ function savePairsToStorage(pairs: PairsData) {
 
 const COURT_NAMES = ["C7", "C8", "C9", "C10", "C11"] as const;
 const MAX_PER_COURT = 4;
-const ADMIN_NAMES = ["luc tilley", "ella rutherford"];
-
-function isAdminName(name: string): boolean {
-  return ADMIN_NAMES.includes(name.trim().toLowerCase());
-}
+const ADMIN_PASSWORD = "lucella";
 
 function CourtsView({
   tournamentPlayers,
@@ -502,6 +498,9 @@ export default function Home() {
     null,
   );
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showSportsSecModal, setShowSportsSecModal] = useState(false);
+  const [sportsSecPassword, setSportsSecPassword] = useState("");
+  const [sportsSecError, setSportsSecError] = useState("");
   const [pairs, setPairsState] = useState<PairsData>(() =>
     loadPairsFromStorage(),
   );
@@ -517,7 +516,7 @@ export default function Home() {
     setStep(2);
   }
 
-  // Load saved state (players, play mode, stage, admin)
+  // Load saved state (players, play mode, stage). Admin is not persisted — re-enter password after reload.
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -529,7 +528,6 @@ export default function Home() {
       );
       const storedMode = window.localStorage.getItem("lawx-padel-play-mode");
       const storedStage = window.localStorage.getItem("lawx-padel-stage");
-      const storedAdmin = window.sessionStorage.getItem("lawx-padel-admin");
       if (storedTournament) {
         const parsed = JSON.parse(storedTournament);
         if (Array.isArray(parsed)) {
@@ -561,7 +559,6 @@ export default function Home() {
           // ignore
         }
       }
-      if (storedAdmin === "true") setIsAdmin(true);
     } catch {
       // ignore bad storage data
     }
@@ -652,15 +649,19 @@ export default function Home() {
       );
     }
 
-    if (isAdminName(trimmed)) {
-      try {
-        window.sessionStorage.setItem("lawx-padel-admin", "true");
-      } catch {
-        // ignore
-      }
-      setIsAdmin(true);
-    }
     setName("");
+  }
+
+  function handleSportsSecSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSportsSecError("");
+    if (sportsSecPassword.trim().toLowerCase() === ADMIN_PASSWORD) {
+      setIsAdmin(true);
+      setShowSportsSecModal(false);
+      setSportsSecPassword("");
+    } else {
+      setSportsSecError("Incorrect password. Try again.");
+    }
   }
 
   function removePlayer(player: string, from: "tournament" | "social") {
@@ -1203,6 +1204,82 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Sports Sec — bottom left: click to open admin password */}
+      <button
+        type="button"
+        onClick={() => {
+          setShowSportsSecModal(true);
+          setSportsSecError("");
+          setSportsSecPassword("");
+        }}
+        className="fixed bottom-5 left-5 z-10 flex items-center gap-2 rounded-xl border border-slate-600/80 bg-slate-900/90 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-300 shadow-lg backdrop-blur-sm transition hover:border-emerald-500/50 hover:bg-slate-800/95 hover:text-emerald-200"
+        aria-label="Sports Sec — admin access"
+      >
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-700/80 text-slate-200">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </span>
+        Sports Sec
+      </button>
+
+      {showSportsSecModal && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-700/80 bg-slate-950/95 p-6 shadow-2xl backdrop-blur-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200">
+                Sports Sec
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSportsSecModal(false);
+                  setSportsSecPassword("");
+                  setSportsSecError("");
+                }}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                aria-label="Close"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="mb-4 text-xs text-slate-400">
+              Enter the password to access admin options. You’ll need to sign in again after each page reload.
+            </p>
+            <form onSubmit={handleSportsSecSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="sports-sec-password" className="sr-only">
+                  Password
+                </label>
+                <input
+                  id="sports-sec-password"
+                  type="password"
+                  value={sportsSecPassword}
+                  onChange={(e) => {
+                    setSportsSecPassword(e.target.value);
+                    setSportsSecError("");
+                  }}
+                  placeholder="Password"
+                  className="w-full rounded-xl border border-slate-600 bg-slate-800/80 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30"
+                  autoComplete="current-password"
+                />
+                {sportsSecError && (
+                  <p className="mt-2 text-xs text-red-400">{sportsSecError}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-emerald-500/20 py-3 text-sm font-semibold text-emerald-100 ring-1 ring-emerald-400/40 transition hover:bg-emerald-500/30"
+              >
+                Sign in as admin
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {showRules && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70 px-4">
