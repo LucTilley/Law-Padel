@@ -2,11 +2,236 @@
 
 import React, { useEffect, useState } from "react";
 
+const COURT_NAMES = ["C7", "C8", "C9", "C10", "C11"] as const;
+const MAX_PER_COURT = 4;
+const ADMIN_NAMES = ["luc tilley", "ella rutherford"];
+
+function isAdminName(name: string): boolean {
+  return ADMIN_NAMES.includes(name.trim().toLowerCase());
+}
+
+function CourtsView({
+  tournamentPlayers,
+  socialPlayers,
+  getCourtAssignment,
+  isAdmin,
+  removePlayer,
+  movePlayer,
+  onBackToLineup,
+}: {
+  tournamentPlayers: string[];
+  socialPlayers: string[];
+  getCourtAssignment: () => {
+    tournamentCourts: string[][];
+    socialCourts: string[][];
+    tournamentWaiting: string[];
+    socialWaiting: string[];
+    tournamentCourtLabels: string[];
+    socialCourtLabels: string[];
+  };
+  isAdmin: boolean;
+  removePlayer: (player: string, from: "tournament" | "social") => void;
+  movePlayer: (player: string, from: "tournament" | "social", to: "tournament" | "social") => void;
+  onBackToLineup: () => void;
+}) {
+  const {
+    tournamentCourts,
+    socialCourts,
+    tournamentWaiting,
+    socialWaiting,
+    tournamentCourtLabels,
+    socialCourtLabels,
+  } = getCourtAssignment();
+
+  function PlayerRow({
+    player,
+    from,
+    badge,
+  }: {
+    player: string;
+    from: "tournament" | "social";
+    badge: React.ReactNode;
+  }) {
+    return (
+      <li className="flex items-center justify-between gap-2 rounded-lg border border-slate-700/60 bg-slate-900/50 px-2.5 py-1.5 text-sm text-slate-100">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {badge}
+          <span className="truncate font-medium">{player}</span>
+        </div>
+        {isAdmin && (
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => movePlayer(player, from, from === "tournament" ? "social" : "tournament")}
+              className="rounded px-1.5 py-0.5 text-[10px] text-slate-400 hover:bg-slate-700/80 hover:text-slate-200"
+            >
+              {from === "tournament" ? "→ Social" : "→ Tourn."}
+            </button>
+            <button
+              type="button"
+              onClick={() => removePlayer(player, from)}
+              className="rounded p-0.5 text-slate-400 hover:bg-red-500/20 hover:text-red-300"
+              aria-label={`Remove ${player}`}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </li>
+    );
+  }
+
+  const tournamentBadge = (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/70 to-cyan-400/70 text-[10px] font-bold text-slate-950" />
+  );
+  const socialBadge = (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-500/80 to-slate-300/80 text-[10px] font-bold text-slate-950" />
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onBackToLineup}
+          className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 transition hover:text-emerald-300"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to lineup
+        </button>
+        <span className="rounded-full border border-slate-700/80 bg-slate-900/80 px-2.5 py-1 text-[11px] text-slate-400">
+          Courts: {COURT_NAMES.join(", ")}
+        </span>
+      </div>
+
+      <div className="space-y-5">
+        {/* Tournament courts */}
+        {tournamentCourtLabels.length > 0 && (
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/85">
+              Tournament courts
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {tournamentCourtLabels.map((label, i) => (
+                <div
+                  key={label}
+                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3"
+                >
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-emerald-200/90">
+                    Court {label}
+                  </p>
+                  <ul className="space-y-1.5">
+                    {tournamentCourts[i]?.map((player) => (
+                      <PlayerRow
+                        key={player}
+                        player={player}
+                        from="tournament"
+                        badge={tournamentBadge}
+                      />
+                    ))}
+                    {(!tournamentCourts[i] || tournamentCourts[i].length === 0) && (
+                      <li className="rounded-lg border border-dashed border-slate-600/60 px-2.5 py-1.5 text-[11px] text-slate-500">
+                        Empty
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            {tournamentWaiting.length > 0 && (
+              <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-amber-200/90">
+                  Waiting for court (Tournament)
+                </p>
+                <ul className="space-y-1.5">
+                  {tournamentWaiting.map((player) => (
+                    <PlayerRow
+                      key={player}
+                      player={player}
+                      from="tournament"
+                      badge={tournamentBadge}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Social courts */}
+        {socialCourtLabels.length > 0 && (
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300/85">
+              Social play courts
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {socialCourtLabels.map((label, i) => (
+                <div
+                  key={label}
+                  className="rounded-xl border border-slate-600/50 bg-slate-800/30 p-3"
+                >
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-200/90">
+                    Court {label}
+                  </p>
+                  <ul className="space-y-1.5">
+                    {socialCourts[i]?.map((player) => (
+                      <PlayerRow
+                        key={player}
+                        player={player}
+                        from="social"
+                        badge={socialBadge}
+                      />
+                    ))}
+                    {(!socialCourts[i] || socialCourts[i].length === 0) && (
+                      <li className="rounded-lg border border-dashed border-slate-600/60 px-2.5 py-1.5 text-[11px] text-slate-500">
+                        Empty
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            {socialWaiting.length > 0 && (
+              <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-amber-200/90">
+                  Waiting for court (Social)
+                </p>
+                <ul className="space-y-1.5">
+                  {socialWaiting.map((player) => (
+                    <PlayerRow
+                      key={player}
+                      player={player}
+                      from="social"
+                      badge={socialBadge}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tournamentPlayers.length === 0 && socialPlayers.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/70 px-4 py-6 text-center text-xs text-slate-400">
+            No players. Go back and add names.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type Step = 1 | 2 | 3;
+type Stage = "names" | "courts";
 
 export default function Home() {
   const [showIntro, setShowIntro] = useState(true);
   const [step, setStep] = useState<Step>(1);
+  const [stage, setStage] = useState<Stage>("names");
   const [name, setName] = useState("");
   const [tournamentPlayers, setTournamentPlayers] = useState<string[]>([]);
   const [socialPlayers, setSocialPlayers] = useState<string[]>([]);
@@ -14,6 +239,7 @@ export default function Home() {
   const [playMode, setPlayMode] = useState<"social" | "tournament" | null>(
     null,
   );
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Intro timing
   useEffect(() => {
@@ -26,7 +252,7 @@ export default function Home() {
     setStep(2);
   }
 
-  // Load saved state (players + play mode)
+  // Load saved state (players, play mode, stage, admin)
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -37,6 +263,8 @@ export default function Home() {
         "lawx-padel-social-players",
       );
       const storedMode = window.localStorage.getItem("lawx-padel-play-mode");
+      const storedStage = window.localStorage.getItem("lawx-padel-stage");
+      const storedAdmin = window.sessionStorage.getItem("lawx-padel-admin");
       if (storedTournament) {
         const parsed = JSON.parse(storedTournament);
         if (Array.isArray(parsed)) {
@@ -52,12 +280,17 @@ export default function Home() {
       if (storedMode === "social" || storedMode === "tournament") {
         setPlayMode(storedMode);
       }
+      if (storedStage === "courts" || storedStage === "names") {
+        setStage(storedStage);
+        if (storedStage === "courts") setStep(3);
+      }
+      if (storedAdmin === "true") setIsAdmin(true);
     } catch {
-      // ignore bad localStorage data
+      // ignore bad storage data
     }
   }, []);
 
-  // Persist players + mode whenever they change
+  // Persist players, mode, stage whenever they change
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -72,10 +305,11 @@ export default function Home() {
       if (playMode) {
         window.localStorage.setItem("lawx-padel-play-mode", playMode);
       }
+      window.localStorage.setItem("lawx-padel-stage", stage);
     } catch {
       // ignore storage errors
     }
-  }, [tournamentPlayers, socialPlayers, playMode]);
+  }, [tournamentPlayers, socialPlayers, playMode, stage]);
 
   function handleAddPlayer() {
     const trimmed = name.trim();
@@ -91,7 +325,120 @@ export default function Home() {
       );
     }
 
+    if (isAdminName(trimmed)) {
+      try {
+        window.sessionStorage.setItem("lawx-padel-admin", "true");
+      } catch {
+        // ignore
+      }
+      setIsAdmin(true);
+    }
     setName("");
+  }
+
+  function removePlayer(player: string, from: "tournament" | "social") {
+    if (!isAdmin) return;
+    if (from === "tournament") {
+      setTournamentPlayers((prev) => prev.filter((p) => p !== player));
+    } else {
+      setSocialPlayers((prev) => prev.filter((p) => p !== player));
+    }
+  }
+
+  function movePlayer(
+    player: string,
+    from: "tournament" | "social",
+    to: "tournament" | "social",
+  ) {
+    if (!isAdmin || from === to) return;
+    if (from === "tournament") {
+      setTournamentPlayers((prev) => prev.filter((p) => p !== player));
+      setSocialPlayers((prev) => (prev.includes(player) ? prev : [...prev, player]));
+    } else {
+      setSocialPlayers((prev) => prev.filter((p) => p !== player));
+      setTournamentPlayers((prev) =>
+        prev.includes(player) ? prev : [...prev, player],
+      );
+    }
+  }
+
+  function continueToCourts() {
+    if (!isAdmin) return;
+    setStage("courts");
+    setStep(3);
+  }
+
+  // Proportional court split: 5 courts between tournament and social by headcount
+  function getCourtAssignment(): {
+    tournamentCourts: string[][];
+    socialCourts: string[][];
+    tournamentWaiting: string[];
+    socialWaiting: string[];
+    tournamentCourtLabels: string[];
+    socialCourtLabels: string[];
+  } {
+    const totalT = tournamentPlayers.length;
+    const totalS = socialPlayers.length;
+    const total = totalT + totalS;
+    if (total === 0) {
+      return {
+        tournamentCourts: [],
+        socialCourts: [],
+        tournamentWaiting: [],
+        socialWaiting: [],
+        tournamentCourtLabels: [],
+        socialCourtLabels: [],
+      };
+    }
+    let courtCountT: number;
+    let courtCountS: number;
+    if (totalT === 0) {
+      courtCountT = 0;
+      courtCountS = 5;
+    } else if (totalS === 0) {
+      courtCountT = 5;
+      courtCountS = 0;
+    } else {
+      courtCountT = Math.round((5 * totalT) / total);
+      courtCountS = 5 - courtCountT;
+      if (courtCountT === 0 && totalT > 0) {
+        courtCountT = 1;
+        courtCountS = 4;
+      }
+      if (courtCountS === 0 && totalS > 0) {
+        courtCountS = 1;
+        courtCountT = 4;
+      }
+    }
+    const tournamentCourtLabels = COURT_NAMES.slice(0, courtCountT);
+    const socialCourtLabels = COURT_NAMES.slice(courtCountT, 5);
+    const tournamentCourts: string[][] = [];
+    for (let i = 0; i < courtCountT; i++) {
+      tournamentCourts.push(
+        tournamentPlayers.slice(
+          i * MAX_PER_COURT,
+          (i + 1) * MAX_PER_COURT,
+        ),
+      );
+    }
+    const tournamentWaiting = tournamentPlayers.slice(
+      courtCountT * MAX_PER_COURT,
+    );
+    const socialCourts: string[][] = [];
+    for (let i = 0; i < courtCountS; i++) {
+      socialCourts.push(
+        socialPlayers.slice(i * MAX_PER_COURT, (i + 1) * MAX_PER_COURT),
+      );
+    }
+    const socialWaiting = socialPlayers.slice(courtCountS * MAX_PER_COURT);
+    return {
+      tournamentCourts,
+      socialCourts,
+      tournamentWaiting,
+      socialWaiting,
+      tournamentCourtLabels,
+      socialCourtLabels,
+    };
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -324,106 +671,181 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Step 3: List of names by section */}
+              {/* Step 3: List of names by section OR Courts view */}
               <div
                 className={`absolute inset-0 flex flex-col transition-all duration-500 ease-out ${
                   step === 3
                     ? "translate-y-0 opacity-100"
                     : "pointer-events-none translate-y-8 opacity-0"
-                }`}
+                } ${stage === "courts" ? "max-h-[72vh] overflow-y-auto" : ""}`}
               >
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setStep(2)}
-                      className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 transition hover:text-emerald-300"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                      </svg>
-                      Add another player
-                    </button>
-                    <span className="rounded-full border border-slate-700/80 bg-slate-900/80 px-2.5 py-1 text-[11px] text-slate-400">
-                      Total: {tournamentPlayers.length + socialPlayers.length}
-                    </span>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
-                      Players by section
-                    </p>
-                    {tournamentPlayers.length === 0 && socialPlayers.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/70 px-4 py-4 text-center text-xs text-slate-400">
-                        No players yet. Go back and add your name.
-                      </div>
-                    ) : (
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div>
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/85">
-                            Tournament
-                          </p>
-                          {tournamentPlayers.length === 0 ? (
-                            <p className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400">
-                              No tournament names yet.
-                            </p>
-                          ) : (
-                            <ul className="space-y-2">
-                              {tournamentPlayers.map((player, index) => (
-                                <li
-                                  key={player}
-                                  className="flex items-center justify-between rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 px-3 py-2 text-sm text-slate-100 shadow-[0_10px_35px_rgba(15,23,42,0.9)]"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/70 to-cyan-400/70 text-[11px] font-bold text-slate-950 shadow-[0_0_16px_rgba(52,211,153,0.9)]">
-                                      {index + 1}
-                                    </span>
-                                    <span className="font-medium tracking-tight">
-                                      {player}
-                                    </span>
-                                  </div>
-                                  <span className="text-[10px] uppercase tracking-[0.18em] text-emerald-300/80">
-                                    Ready
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                        <div>
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300/85">
-                            Social play
-                          </p>
-                          {socialPlayers.length === 0 ? (
-                            <p className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400">
-                              No social-play names yet.
-                            </p>
-                          ) : (
-                            <ul className="space-y-2">
-                              {socialPlayers.map((player, index) => (
-                                <li
-                                  key={player}
-                                  className="flex items-center justify-between rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 px-3 py-2 text-sm text-slate-100 shadow-[0_10px_35px_rgba(15,23,42,0.9)]"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-slate-500/80 to-slate-300/80 text-[11px] font-bold text-slate-950 shadow-[0_0_16px_rgba(148,163,184,0.9)]">
-                                      {index + 1}
-                                    </span>
-                                    <span className="font-medium tracking-tight">
-                                      {player}
-                                    </span>
-                                  </div>
-                                  <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/80">
-                                    Social
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
+                {stage === "names" ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setStep(2)}
+                        className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 transition hover:text-emerald-300"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Add another player
+                      </button>
+                      <span className="rounded-full border border-slate-700/80 bg-slate-900/80 px-2.5 py-1 text-[11px] text-slate-400">
+                        Total: {tournamentPlayers.length + socialPlayers.length}
+                      </span>
+                    </div>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={continueToCourts}
+                        className="w-full rounded-xl border border-amber-400/60 bg-amber-500/15 py-3 text-sm font-semibold text-amber-100 shadow-[0_0_24px_rgba(245,158,11,0.35)] transition hover:border-amber-300 hover:bg-amber-500/25"
+                      >
+                        Continue to the next stage →
+                      </button>
                     )}
+                    <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                        Players by section
+                      </p>
+                      {tournamentPlayers.length === 0 && socialPlayers.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/70 px-4 py-4 text-center text-xs text-slate-400">
+                          No players yet. Go back and add your name.
+                        </div>
+                      ) : (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div>
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/85">
+                              Tournament
+                            </p>
+                            {tournamentPlayers.length === 0 ? (
+                              <p className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400">
+                                No tournament names yet.
+                              </p>
+                            ) : (
+                              <ul className="space-y-2">
+                                {tournamentPlayers.map((player, index) => (
+                                  <li
+                                    key={player}
+                                    className="flex items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 px-3 py-2 text-sm text-slate-100 shadow-[0_10px_35px_rgba(15,23,42,0.9)]"
+                                  >
+                                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/70 to-cyan-400/70 text-[11px] font-bold text-slate-950 shadow-[0_0_16px_rgba(52,211,153,0.9)]">
+                                        {index + 1}
+                                      </span>
+                                      <span className="font-medium tracking-tight truncate">
+                                        {player}
+                                      </span>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-1">
+                                      {isAdmin && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => movePlayer(player, "tournament", "social")}
+                                            className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-slate-700/80 hover:text-slate-200"
+                                            title="Move to social"
+                                          >
+                                            → Social
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => removePlayer(player, "tournament")}
+                                            className="rounded p-1 text-slate-400 hover:bg-red-500/20 hover:text-red-300"
+                                            title="Remove"
+                                            aria-label={`Remove ${player}`}
+                                          >
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                          </button>
+                                        </>
+                                      )}
+                                      {!isAdmin && (
+                                        <span className="text-[10px] uppercase tracking-[0.18em] text-emerald-300/80">
+                                          Ready
+                                        </span>
+                                      )}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                          <div>
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300/85">
+                              Social play
+                            </p>
+                            {socialPlayers.length === 0 ? (
+                              <p className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400">
+                                No social-play names yet.
+                              </p>
+                            ) : (
+                              <ul className="space-y-2">
+                                {socialPlayers.map((player, index) => (
+                                  <li
+                                    key={player}
+                                    className="flex items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 px-3 py-2 text-sm text-slate-100 shadow-[0_10px_35px_rgba(15,23,42,0.9)]"
+                                  >
+                                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-500/80 to-slate-300/80 text-[11px] font-bold text-slate-950 shadow-[0_0_16px_rgba(148,163,184,0.9)]">
+                                        {index + 1}
+                                      </span>
+                                      <span className="font-medium tracking-tight truncate">
+                                        {player}
+                                      </span>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-1">
+                                      {isAdmin && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => movePlayer(player, "social", "tournament")}
+                                            className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-slate-700/80 hover:text-slate-200"
+                                            title="Move to tournament"
+                                          >
+                                            → Tournament
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => removePlayer(player, "social")}
+                                            className="rounded p-1 text-slate-400 hover:bg-red-500/20 hover:text-red-300"
+                                            title="Remove"
+                                            aria-label={`Remove ${player}`}
+                                          >
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                          </button>
+                                        </>
+                                      )}
+                                      {!isAdmin && (
+                                        <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/80">
+                                          Social
+                                        </span>
+                                      )}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <CourtsView
+                    tournamentPlayers={tournamentPlayers}
+                    socialPlayers={socialPlayers}
+                    getCourtAssignment={getCourtAssignment}
+                    isAdmin={isAdmin}
+                    removePlayer={removePlayer}
+                    movePlayer={movePlayer}
+                    onBackToLineup={() => setStage("names")}
+                  />
+                )}
               </div>
             </div>
           </div>
