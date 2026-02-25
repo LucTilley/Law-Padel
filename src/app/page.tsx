@@ -2,8 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 
+type Step = 1 | 2 | 3;
+
 export default function Home() {
   const [showIntro, setShowIntro] = useState(true);
+  const [step, setStep] = useState<Step>(1);
   const [name, setName] = useState("");
   const [tournamentPlayers, setTournamentPlayers] = useState<string[]>([]);
   const [socialPlayers, setSocialPlayers] = useState<string[]>([]);
@@ -17,6 +20,11 @@ export default function Home() {
     const timer = setTimeout(() => setShowIntro(false), 2600);
     return () => clearTimeout(timer);
   }, []);
+
+  function chooseMode(mode: "social" | "tournament") {
+    setPlayMode(mode);
+    setStep(2);
+  }
 
   // Load saved state (players + play mode)
   useEffect(() => {
@@ -189,200 +197,233 @@ export default function Home() {
               </h1>
             </div>
 
-            {/* Form + players list */}
+            {/* Multi-step flow: 1 = mode, 2 = name input, 3 = list */}
             <div
-              className={`flex flex-col gap-6 transition-all duration-700 ${
+              className={`relative min-h-[420px] transition-all duration-700 ${
                 showIntro
                   ? "pointer-events-none -translate-y-4 opacity-0"
                   : "translate-y-0 opacity-100"
               }`}
             >
-              {/* Choice of play */}
-              <div className="mt-4 rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4">
-                <div className="flex flex-col gap-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200/80">
-                    Choice of play today
-                  </p>
-                  <p className="text-[11px] text-slate-300/90">
-                    Once the tournament has started, you cannot switch between.
-                  </p>
-                </div>
-                <div className="mt-3 grid gap-2 md:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => setPlayMode("social")}
-                    className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-left text-xs md:text-sm ${
-                      playMode === "social"
-                        ? "border-emerald-400/80 bg-emerald-500/15 shadow-[0_0_25px_rgba(34,197,94,0.6)]"
-                        : "border-slate-700/80 bg-slate-900/80 hover:border-emerald-400/60 hover:bg-emerald-500/10"
-                    }`}
-                  >
-                    <span
-                      className={`mt-1 inline-flex h-3 w-3 items-center justify-center rounded-full border ${
-                        playMode === "social"
-                          ? "border-emerald-300 bg-emerald-400"
-                          : "border-slate-500"
-                      }`}
-                    />
-                    <span className="text-slate-100">
-                      I am just here to play socially
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPlayMode("tournament")}
-                    className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-left text-xs md:text-sm ${
-                      playMode === "tournament"
-                        ? "border-emerald-400/80 bg-emerald-500/15 shadow-[0_0_25px_rgba(34,197,94,0.6)]"
-                        : "border-slate-700/80 bg-slate-900/80 hover:border-emerald-400/60 hover:bg-emerald-500/10"
-                    }`}
-                  >
-                    <span
-                      className={`mt-1 inline-flex h-3 w-3 items-center justify-center rounded-full border ${
-                        playMode === "tournament"
-                          ? "border-emerald-300 bg-emerald-400"
-                          : "border-slate-500"
-                      }`}
-                    />
-                    <span className="text-slate-100">
-                      I am here to play in the tournament
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200/80">
-                  Join the court
-                </p>
-                <p className="mt-1 text-sm text-slate-300/95">
-                  Put your name in and once everyone is in, we will assign courts.
-                </p>
-              </div>
-
-              <div className="mt-1 flex flex-col gap-4 md:flex-row md:items-center">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 rounded-2xl border border-emerald-400/50 bg-gradient-to-r from-emerald-500/15 via-slate-900/90 to-cyan-500/10 px-4 py-3 shadow-[0_0_0_1px_rgba(74,222,128,0.35)]">
-                    <div className="hidden h-8 items-center rounded-full border border-emerald-300/70 bg-emerald-500/15 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100 shadow-sm md:inline-flex">
-                      Player
-                    </div>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Type your name and hit Add player…"
-                      className="flex-1 bg-transparent text-sm text-slate-50 placeholder:text-emerald-100/70 focus:outline-none md:text-base"
-                    />
+              {/* Step 1: Choice of play only */}
+              <div
+                className={`absolute inset-0 flex flex-col justify-center transition-all duration-500 ease-out ${
+                  step === 1
+                    ? "translate-y-0 opacity-100"
+                    : "pointer-events-none -translate-y-6 opacity-0"
+                }`}
+              >
+                <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-5 md:p-6">
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200/80">
+                      Choice of play today
+                    </p>
+                    <p className="text-[11px] text-slate-300/90">
+                      Once the tournament has started, you cannot switch between.
+                    </p>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <button
                       type="button"
-                      onClick={handleAddPlayer}
-                      disabled={!name.trim()}
-                      className="flex h-9 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 via-cyan-400 to-sky-400 px-4 text-xs font-semibold text-slate-950 shadow-[0_0_20px_rgba(34,197,94,0.85)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 md:h-10 md:px-5"
+                      onClick={() => chooseMode("social")}
+                      className="flex items-start gap-3 rounded-xl border border-slate-700/80 bg-slate-900/80 px-4 py-3.5 text-left text-sm transition hover:border-emerald-400/60 hover:bg-emerald-500/10 hover:shadow-[0_0_25px_rgba(34,197,94,0.4)] md:text-base"
                     >
-                      Add player
+                      <span className="mt-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-slate-500" />
+                      <span className="text-slate-100">
+                        I am just here to play socially
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => chooseMode("tournament")}
+                      className="flex items-start gap-3 rounded-xl border border-slate-700/80 bg-slate-900/80 px-4 py-3.5 text-left text-sm transition hover:border-emerald-400/60 hover:bg-emerald-500/10 hover:shadow-[0_0_25px_rgba(34,197,94,0.4)] md:text-base"
+                    >
+                      <span className="mt-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-slate-500" />
+                      <span className="text-slate-100">
+                        I am here to play in the tournament
+                      </span>
                     </button>
                   </div>
-                  <p className="mt-2 text-[11px] text-emerald-100/85">
-                    Press{" "}
-                    <span className="rounded border border-emerald-200/70 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold">
-                      Enter
-                    </span>{" "}
-                    to quickly add yourself to the list.
-                  </p>
                 </div>
               </div>
 
-              <div className="mt-3 rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
+              {/* Step 2: Name input */}
+              <div
+                className={`absolute inset-0 flex flex-col justify-center transition-all duration-500 ease-out ${
+                  step === 2
+                    ? "translate-y-0 opacity-100"
+                    : step < 2
+                      ? "pointer-events-none translate-y-8 opacity-0"
+                      : "pointer-events-none -translate-y-6 opacity-0"
+                }`}
+              >
+                <div className="space-y-5">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 transition hover:text-emerald-300"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Change play type
+                  </button>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
-                      Players…
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200/80">
+                      Join the court
                     </p>
-                    <p className="mt-1 text-xs text-slate-300/90 md:text-sm">
-                      We&apos;ll auto-stack the lineup as names come in.
+                    <p className="mt-1 text-sm text-slate-300/95">
+                      Put your name in and once everyone is in, we will assign courts.
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Playing as{" "}
+                      <span className="font-semibold text-emerald-200/90">
+                        {playMode === "tournament" ? "tournament" : "social"}
+                      </span>
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                    <span className="rounded-full border border-slate-700/80 bg-slate-900/80 px-2 py-0.5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 rounded-2xl border border-emerald-400/50 bg-gradient-to-r from-emerald-500/15 via-slate-900/90 to-cyan-500/10 px-4 py-3 shadow-[0_0_0_1px_rgba(74,222,128,0.35)]">
+                        <div className="hidden h-8 items-center rounded-full border border-emerald-300/70 bg-emerald-500/15 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100 shadow-sm md:inline-flex">
+                          Player
+                        </div>
+                        <input
+                          type="text"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder="Type your name and hit Add player…"
+                          className="flex-1 bg-transparent text-sm text-slate-50 placeholder:text-emerald-100/70 focus:outline-none md:text-base"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddPlayer}
+                          disabled={!name.trim()}
+                          className="flex h-9 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 via-cyan-400 to-sky-400 px-4 text-xs font-semibold text-slate-950 shadow-[0_0_20px_rgba(34,197,94,0.85)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 md:h-10 md:px-5"
+                        >
+                          Add player
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[11px] text-emerald-100/85">
+                        Press{" "}
+                        <span className="rounded border border-emerald-200/70 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold">
+                          Enter
+                        </span>{" "}
+                        to quickly add yourself.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(3)}
+                    className="w-full rounded-xl border border-emerald-400/60 bg-emerald-500/10 py-3 text-sm font-semibold text-emerald-100 shadow-[0_0_24px_rgba(34,197,94,0.4)] transition hover:border-emerald-300 hover:bg-emerald-500/20"
+                  >
+                    See lineup →
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 3: List of names by section */}
+              <div
+                className={`absolute inset-0 flex flex-col transition-all duration-500 ease-out ${
+                  step === 3
+                    ? "translate-y-0 opacity-100"
+                    : "pointer-events-none translate-y-8 opacity-0"
+                }`}
+              >
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 transition hover:text-emerald-300"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Add another player
+                    </button>
+                    <span className="rounded-full border border-slate-700/80 bg-slate-900/80 px-2.5 py-1 text-[11px] text-slate-400">
                       Total: {tournamentPlayers.length + socialPlayers.length}
                     </span>
                   </div>
+                  <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                      Players by section
+                    </p>
+                    {tournamentPlayers.length === 0 && socialPlayers.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/70 px-4 py-4 text-center text-xs text-slate-400">
+                        No players yet. Go back and add your name.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/85">
+                            Tournament
+                          </p>
+                          {tournamentPlayers.length === 0 ? (
+                            <p className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400">
+                              No tournament names yet.
+                            </p>
+                          ) : (
+                            <ul className="space-y-2">
+                              {tournamentPlayers.map((player, index) => (
+                                <li
+                                  key={player}
+                                  className="flex items-center justify-between rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 px-3 py-2 text-sm text-slate-100 shadow-[0_10px_35px_rgba(15,23,42,0.9)]"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/70 to-cyan-400/70 text-[11px] font-bold text-slate-950 shadow-[0_0_16px_rgba(52,211,153,0.9)]">
+                                      {index + 1}
+                                    </span>
+                                    <span className="font-medium tracking-tight">
+                                      {player}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] uppercase tracking-[0.18em] text-emerald-300/80">
+                                    Ready
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                        <div>
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300/85">
+                            Social play
+                          </p>
+                          {socialPlayers.length === 0 ? (
+                            <p className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400">
+                              No social-play names yet.
+                            </p>
+                          ) : (
+                            <ul className="space-y-2">
+                              {socialPlayers.map((player, index) => (
+                                <li
+                                  key={player}
+                                  className="flex items-center justify-between rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 px-3 py-2 text-sm text-slate-100 shadow-[0_10px_35px_rgba(15,23,42,0.9)]"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-slate-500/80 to-slate-300/80 text-[11px] font-bold text-slate-950 shadow-[0_0_16px_rgba(148,163,184,0.9)]">
+                                      {index + 1}
+                                    </span>
+                                    <span className="font-medium tracking-tight">
+                                      {player}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/80">
+                                    Social
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-
-                {tournamentPlayers.length === 0 && socialPlayers.length === 0 ? (
-                  <div className="flex items-center justify-between rounded-xl border border-dashed border-slate-700/80 bg-slate-900/70 px-3 py-3 text-xs text-slate-400 md:px-4">
-                    <span>
-                      No players yet. Be the first name glowing on the wall.
-                    </span>
-                  </div>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/85">
-                        Tournament
-                      </p>
-                      {tournamentPlayers.length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400">
-                          No tournament names yet.
-                        </p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {tournamentPlayers.map((player, index) => (
-                            <li
-                              key={player}
-                              className="group flex items-center justify-between rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 px-3 py-2 text-sm text-slate-100 shadow-[0_10px_35px_rgba(15,23,42,0.9)]"
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/70 to-cyan-400/70 text-[11px] font-bold text-slate-950 shadow-[0_0_16px_rgba(52,211,153,0.9)]">
-                                  {index + 1}
-                                </span>
-                                <span className="font-medium tracking-tight">
-                                  {player}
-                                </span>
-                              </div>
-                              <span className="text-[10px] uppercase tracking-[0.18em] text-emerald-300/80">
-                                Ready
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
-                    <div>
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300/85">
-                        Social play
-                      </p>
-                      {socialPlayers.length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400">
-                          No social-play names yet.
-                        </p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {socialPlayers.map((player, index) => (
-                            <li
-                              key={player}
-                              className="group flex items-center justify-between rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 px-3 py-2 text-sm text-slate-100 shadow-[0_10px_35px_rgba(15,23,42,0.9)]"
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-slate-500/80 to-slate-300/80 text-[11px] font-bold text-slate-950 shadow-[0_0_16px_rgba(148,163,184,0.9)]">
-                                  {index + 1}
-                                </span>
-                                <span className="font-medium tracking-tight">
-                                  {player}
-                                </span>
-                              </div>
-                              <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/80">
-                                Social
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
