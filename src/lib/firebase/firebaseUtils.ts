@@ -8,9 +8,12 @@ import {
   collection,
   addDoc,
   getDocs,
+  getDoc,
+  setDoc,
   doc,
   updateDoc,
   deleteDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -45,6 +48,50 @@ export const updateDocument = (collectionName: string, id: string, data: any) =>
 
 export const deleteDocument = (collectionName: string, id: string) =>
   deleteDoc(doc(db, collectionName, id));
+
+const PADEL_COLLECTION = "lawx-padel";
+const PAIRS_DOC_ID = "pairs";
+
+export type PairsData = {
+  tournament: [string, string][];
+  social: [string, string][];
+};
+
+export async function getPairs(): Promise<PairsData | null> {
+  try {
+    const ref = doc(db, PADEL_COLLECTION, PAIRS_DOC_ID);
+    const snap = await getDoc(ref);
+    const data = snap.data();
+    if (!data) return null;
+    return {
+      tournament: Array.isArray(data.tournament) ? data.tournament : [],
+      social: Array.isArray(data.social) ? data.social : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function setPairs(pairs: PairsData): Promise<void> {
+  const ref = doc(db, PADEL_COLLECTION, PAIRS_DOC_ID);
+  await setDoc(ref, pairs);
+}
+
+export function subscribePairs(callback: (pairs: PairsData) => void): (() => void) | null {
+  try {
+    const ref = doc(db, PADEL_COLLECTION, PAIRS_DOC_ID);
+    const unsub = onSnapshot(ref, (snap) => {
+      const data = snap.data();
+      callback({
+        tournament: Array.isArray(data?.tournament) ? data.tournament : [],
+        social: Array.isArray(data?.social) ? data.social : [],
+      });
+    });
+    return () => unsub();
+  } catch {
+    return null;
+  }
+}
 
 // Storage functions
 export const uploadFile = async (file: File, path: string) => {

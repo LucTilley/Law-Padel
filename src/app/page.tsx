@@ -1,6 +1,38 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+
+const PAIRS_STORAGE_KEY = "lawx-padel-pairs";
+
+export type PairsData = {
+  tournament: [string, string][];
+  social: [string, string][];
+};
+
+function loadPairsFromStorage(): PairsData {
+  if (typeof window === "undefined")
+    return { tournament: [], social: [] };
+  try {
+    const raw = window.localStorage.getItem(PAIRS_STORAGE_KEY);
+    if (!raw) return { tournament: [], social: [] };
+    const parsed = JSON.parse(raw);
+    return {
+      tournament: Array.isArray(parsed.tournament) ? parsed.tournament : [],
+      social: Array.isArray(parsed.social) ? parsed.social : [],
+    };
+  } catch {
+    return { tournament: [], social: [] };
+  }
+}
+
+function savePairsToStorage(pairs: PairsData) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PAIRS_STORAGE_KEY, JSON.stringify(pairs));
+  } catch {
+    // ignore
+  }
+}
 
 const COURT_NAMES = ["C7", "C8", "C9", "C10", "C11"] as const;
 const MAX_PER_COURT = 4;
@@ -226,7 +258,237 @@ function CourtsView({
 }
 
 type Step = 1 | 2 | 3;
-type Stage = "names" | "courts";
+type Stage = "names" | "pairing" | "courts";
+
+function PairingView({
+  tournamentPlayers,
+  socialPlayers,
+  pairs,
+  onPairsChange,
+  onViewCourts,
+  isAdmin,
+}: {
+  tournamentPlayers: string[];
+  socialPlayers: string[];
+  pairs: PairsData;
+  onPairsChange: (pairs: PairsData) => void;
+  onViewCourts: () => void;
+  isAdmin: boolean;
+}) {
+  const [tournamentPair, setTournamentPair] = useState<[string, string]>(["", ""]);
+  const [socialPair, setSocialPair] = useState<[string, string]>(["", ""]);
+
+  const pairedTournament = new Set(
+    pairs.tournament.flat(),
+  );
+  const pairedSocial = new Set(pairs.social.flat());
+  const unpairedTournament = tournamentPlayers.filter((p) => !pairedTournament.has(p));
+  const unpairedSocial = socialPlayers.filter((p) => !pairedSocial.has(p));
+
+  function addPair(list: "tournament" | "social", a: string, b: string) {
+    if (!a || !b || a === b) return;
+    const [x, y] = a < b ? [a, b] : [b, a];
+    const next = { ...pairs };
+    if (list === "tournament") {
+      if (pairedTournament.has(x) || pairedTournament.has(y)) return;
+      next.tournament = [...next.tournament, [x, y]];
+      setTournamentPair(["", ""]);
+    } else {
+      if (pairedSocial.has(x) || pairedSocial.has(y)) return;
+      next.social = [...next.social, [x, y]];
+      setSocialPair(["", ""]);
+    }
+    onPairsChange(next);
+  }
+
+  function removePair(list: "tournament" | "social", pair: [string, string]) {
+    const next = { ...pairs };
+    if (list === "tournament") {
+      next.tournament = next.tournament.filter(
+        ([p, q]) => !(p === pair[0] && q === pair[1]),
+      );
+    } else {
+      next.social = next.social.filter(
+        ([p, q]) => !(p === pair[0] && q === pair[1]),
+      );
+    }
+    onPairsChange(next);
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-slate-400">
+        Pair names within each list. Everyone can create or remove pairs; changes are visible to all.
+      </p>
+      <div className="grid gap-5 md:grid-cols-2">
+        {/* Tournament list + pairing */}
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/85">
+            Tournament players
+          </p>
+          <ul className="mb-3 max-h-32 space-y-1 overflow-y-auto rounded-lg border border-slate-700/50 bg-slate-900/50 p-2">
+            {tournamentPlayers.length === 0 ? (
+              <li className="text-[11px] text-slate-500">No tournament players</li>
+            ) : (
+              tournamentPlayers.map((p) => (
+                <li key={p} className="text-sm text-slate-200">
+                  {p}
+                  {pairedTournament.has(p) && (
+                    <span className="ml-2 text-[10px] text-emerald-400">(paired)</span>
+                  )}
+                </li>
+              ))
+            )}
+          </ul>
+          <div className="mb-3 flex flex-wrap gap-2">
+            <select
+              value={tournamentPair[0]}
+              onChange={(e) => setTournamentPair((prev) => [e.target.value, prev[1]])}
+              className="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+            >
+              <option value="">Select first</option>
+              {unpairedTournament.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <span className="text-slate-500">+</span>
+            <select
+              value={tournamentPair[1]}
+              onChange={(e) => setTournamentPair((prev) => [prev[0], e.target.value])}
+              className="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+            >
+              <option value="">Select second</option>
+              {unpairedTournament.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => addPair("tournament", tournamentPair[0], tournamentPair[1])}
+              disabled={!tournamentPair[0] || !tournamentPair[1] || tournamentPair[0] === tournamentPair[1]}
+              className="rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-200 disabled:opacity-50"
+            >
+              Pair (tournament)
+            </button>
+          </div>
+          {pairs.tournament.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Pairs
+              </p>
+              <ul className="space-y-1.5">
+                {pairs.tournament.map(([a, b]) => (
+                  <li
+                    key={`${a}-${b}`}
+                    className="flex items-center justify-between rounded-lg border border-slate-600/60 bg-slate-800/50 px-2.5 py-1.5 text-sm text-slate-100"
+                  >
+                    <span>{a} + {b}</span>
+                    <button
+                      type="button"
+                      onClick={() => removePair("tournament", [a, b])}
+                      className="rounded p-1 text-slate-400 hover:bg-red-500/20 hover:text-red-300"
+                      aria-label={`Unpair ${a} and ${b}`}
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Social list + pairing */}
+        <div className="rounded-2xl border border-slate-600/50 bg-slate-800/30 p-4">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300/85">
+            Social play players
+          </p>
+          <ul className="mb-3 max-h-32 space-y-1 overflow-y-auto rounded-lg border border-slate-700/50 bg-slate-900/50 p-2">
+            {socialPlayers.length === 0 ? (
+              <li className="text-[11px] text-slate-500">No social players</li>
+            ) : (
+              socialPlayers.map((p) => (
+                <li key={p} className="text-sm text-slate-200">
+                  {p}
+                  {pairedSocial.has(p) && (
+                    <span className="ml-2 text-[10px] text-slate-400">(paired)</span>
+                  )}
+                </li>
+              ))
+            )}
+          </ul>
+          <div className="mb-3 flex flex-wrap gap-2">
+            <select
+              value={socialPair[0]}
+              onChange={(e) => setSocialPair((prev) => [e.target.value, prev[1]])}
+              className="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+            >
+              <option value="">Select first</option>
+              {unpairedSocial.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <span className="text-slate-500">+</span>
+            <select
+              value={socialPair[1]}
+              onChange={(e) => setSocialPair((prev) => [prev[0], e.target.value])}
+              className="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+            >
+              <option value="">Select second</option>
+              {unpairedSocial.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => addPair("social", socialPair[0], socialPair[1])}
+              disabled={!socialPair[0] || !socialPair[1] || socialPair[0] === socialPair[1]}
+              className="rounded-lg bg-slate-600/50 px-3 py-1.5 text-xs font-medium text-slate-200 disabled:opacity-50"
+            >
+              Pair (social)
+            </button>
+          </div>
+          {pairs.social.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Pairs
+              </p>
+              <ul className="space-y-1.5">
+                {pairs.social.map(([a, b]) => (
+                  <li
+                    key={`${a}-${b}`}
+                    className="flex items-center justify-between rounded-lg border border-slate-600/60 bg-slate-800/50 px-2.5 py-1.5 text-sm text-slate-100"
+                  >
+                    <span>{a} + {b}</span>
+                    <button
+                      type="button"
+                      onClick={() => removePair("social", [a, b])}
+                      className="rounded p-1 text-slate-400 hover:bg-red-500/20 hover:text-red-300"
+                      aria-label={`Unpair ${a} and ${b}`}
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onViewCourts}
+        className="w-full rounded-xl border border-emerald-400/60 bg-emerald-500/10 py-3 text-sm font-semibold text-emerald-100 shadow-[0_0_24px_rgba(34,197,94,0.4)] transition hover:border-emerald-300 hover:bg-emerald-500/20"
+      >
+        View courts →
+      </button>
+    </div>
+  );
+}
 
 export default function Home() {
   const [showIntro, setShowIntro] = useState(true);
@@ -240,6 +502,9 @@ export default function Home() {
     null,
   );
   const [isAdmin, setIsAdmin] = useState(false);
+  const [pairs, setPairsState] = useState<PairsData>(() =>
+    loadPairsFromStorage(),
+  );
 
   // Intro timing
   useEffect(() => {
@@ -280,9 +545,21 @@ export default function Home() {
       if (storedMode === "social" || storedMode === "tournament") {
         setPlayMode(storedMode);
       }
-      if (storedStage === "courts" || storedStage === "names") {
+      if (storedStage === "courts" || storedStage === "pairing" || storedStage === "names") {
         setStage(storedStage);
-        if (storedStage === "courts") setStep(3);
+        if (storedStage === "courts" || storedStage === "pairing") setStep(3);
+      }
+      const storedPairs = window.localStorage.getItem(PAIRS_STORAGE_KEY);
+      if (storedPairs) {
+        try {
+          const parsed = JSON.parse(storedPairs);
+          setPairsState({
+            tournament: Array.isArray(parsed.tournament) ? parsed.tournament : [],
+            social: Array.isArray(parsed.social) ? parsed.social : [],
+          });
+        } catch {
+          // ignore
+        }
       }
       if (storedAdmin === "true") setIsAdmin(true);
     } catch {
@@ -310,6 +587,56 @@ export default function Home() {
       // ignore storage errors
     }
   }, [tournamentPlayers, socialPlayers, playMode, stage]);
+
+  // Sync pairs from server so all users see the same pairs
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/pairs");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && (Array.isArray(data.tournament) || Array.isArray(data.social)))
+            setPairsState({
+              tournament: Array.isArray(data.tournament) ? data.tournament : [],
+              social: Array.isArray(data.social) ? data.social : [],
+            });
+        }
+      } catch {
+        // keep localStorage state
+      }
+    })();
+  }, []);
+
+  // When on pairing view, poll so everyone sees updates
+  useEffect(() => {
+    if (stage !== "pairing") return;
+    const t = setInterval(async () => {
+      try {
+        const res = await fetch("/api/pairs");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && (Array.isArray(data.tournament) || Array.isArray(data.social)))
+            setPairsState({
+              tournament: Array.isArray(data.tournament) ? data.tournament : [],
+              social: Array.isArray(data.social) ? data.social : [],
+            });
+        }
+      } catch {
+        // ignore
+      }
+    }, 3000);
+    return () => clearInterval(t);
+  }, [stage]);
+
+  const setPairs = useCallback((next: PairsData) => {
+    setPairsState(next);
+    savePairsToStorage(next);
+    fetch("/api/pairs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(next),
+    }).catch(() => {});
+  }, []);
 
   function handleAddPlayer() {
     const trimmed = name.trim();
@@ -362,10 +689,14 @@ export default function Home() {
     }
   }
 
-  function continueToCourts() {
+  function continueToNextStage() {
     if (!isAdmin) return;
-    setStage("courts");
+    setStage("pairing");
     setStep(3);
+  }
+
+  function goToCourtsView() {
+    setStage("courts");
   }
 
   // Proportional court split: 5 courts between tournament and social by headcount
@@ -677,7 +1008,7 @@ export default function Home() {
                   step === 3
                     ? "translate-y-0 opacity-100"
                     : "pointer-events-none translate-y-8 opacity-0"
-                } ${stage === "courts" ? "max-h-[72vh] overflow-y-auto" : ""}`}
+                } ${stage === "courts" || stage === "pairing" ? "max-h-[72vh] overflow-y-auto" : ""}`}
               >
                 {stage === "names" ? (
                   <div className="space-y-4">
@@ -699,7 +1030,7 @@ export default function Home() {
                     {isAdmin && (
                       <button
                         type="button"
-                        onClick={continueToCourts}
+                        onClick={continueToNextStage}
                         className="w-full rounded-xl border border-amber-400/60 bg-amber-500/15 py-3 text-sm font-semibold text-amber-100 shadow-[0_0_24px_rgba(245,158,11,0.35)] transition hover:border-amber-300 hover:bg-amber-500/25"
                       >
                         Continue to the next stage →
@@ -834,6 +1165,27 @@ export default function Home() {
                         </div>
                       )}
                     </div>
+                  </div>
+                ) : stage === "pairing" ? (
+                  <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => setStage("names")}
+                      className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 transition hover:text-emerald-300"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Back to lineup
+                    </button>
+                    <PairingView
+                      tournamentPlayers={tournamentPlayers}
+                      socialPlayers={socialPlayers}
+                      pairs={pairs}
+                      onPairsChange={setPairs}
+                      onViewCourts={goToCourtsView}
+                      isAdmin={isAdmin}
+                    />
                   </div>
                 ) : (
                   <CourtsView
