@@ -37,7 +37,7 @@ export const addDocument = (collectionName: string, data: any) =>
 
 export const getDocuments = async (collectionName: string) => {
   const querySnapshot = await getDocs(collection(db, collectionName));
-  return querySnapshot.docs.map(doc => ({
+  return querySnapshot.docs.map((doc: { id: string; data(): Record<string, unknown> }) => ({
     id: doc.id,
     ...doc.data()
   }));
@@ -80,7 +80,7 @@ export async function setPairs(pairs: PairsData): Promise<void> {
 export function subscribePairs(callback: (pairs: PairsData) => void): (() => void) | null {
   try {
     const ref = doc(db, PADEL_COLLECTION, PAIRS_DOC_ID);
-    const unsub = onSnapshot(ref, (snap) => {
+    const unsub = onSnapshot(ref, (snap: { data(): Record<string, unknown> | undefined }) => {
       const data = snap.data();
       callback({
         tournament: Array.isArray(data?.tournament) ? data.tournament : [],

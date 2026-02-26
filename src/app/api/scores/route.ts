@@ -18,10 +18,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const pairA = Array.isArray(body.pairA) && body.pairA.length === 2
+    const pairA: [string, string] | null = Array.isArray(body.pairA) && body.pairA.length === 2
       ? [String(body.pairA[0]).trim(), String(body.pairA[1]).trim()]
       : null;
-    const pairB = Array.isArray(body.pairB) && body.pairB.length === 2
+    const pairB: [string, string] | null = Array.isArray(body.pairB) && body.pairB.length === 2
       ? [String(body.pairB[0]).trim(), String(body.pairB[1]).trim()]
       : null;
     const winner = body.winner === "A" || body.winner === "B" ? body.winner : null;
