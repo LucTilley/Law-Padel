@@ -32,6 +32,13 @@ export async function POST(request: Request) {
 
     const keyA = pairKey(pairA);
     const keyB = pairKey(pairB);
+    const already = matches.some(
+      (m) => (m.pairA === keyA && m.pairB === keyB) || (m.pairA === keyB && m.pairB === keyA),
+    );
+    if (already) {
+      return NextResponse.json({ error: "Match already recorded" }, { status: 400 });
+    }
+
     if (!points[keyA]) points[keyA] = 0;
     if (!points[keyB]) points[keyB] = 0;
     if (winner === "A") points[keyA] += 1;
