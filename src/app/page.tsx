@@ -38,6 +38,8 @@ const COURT_NAMES = ["C7", "C8", "C9", "C10", "C11"] as const;
 const MAX_PER_COURT = 4;
 const ADMIN_PASSWORD = "lucella";
 
+type CourtPair = [[string, string], [string, string]];
+
 function CourtsView({
   tournamentPlayers,
   socialPlayers,
@@ -50,8 +52,8 @@ function CourtsView({
   tournamentPlayers: string[];
   socialPlayers: string[];
   getCourtAssignment: () => {
-    tournamentCourts: string[][];
-    socialCourts: string[][];
+    tournamentCourts: CourtPair[];
+    socialCourts: CourtPair[];
     tournamentWaiting: string[];
     socialWaiting: string[];
     tournamentCourtLabels: string[];
@@ -144,31 +146,31 @@ function CourtsView({
               Tournament courts
             </p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {tournamentCourtLabels.map((label, i) => (
-                <div
-                  key={label}
-                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3"
-                >
-                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-emerald-200/90">
-                    Court {label}
-                  </p>
-                  <ul className="space-y-1.5">
-                    {tournamentCourts[i]?.map((player) => (
-                      <PlayerRow
-                        key={player}
-                        player={player}
-                        from="tournament"
-                        badge={tournamentBadge}
-                      />
-                    ))}
-                    {(!tournamentCourts[i] || tournamentCourts[i].length === 0) && (
-                      <li className="rounded-lg border border-dashed border-slate-600/60 px-2.5 py-1.5 text-[11px] text-slate-500">
-                        Empty
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              ))}
+              {tournamentCourts.map((court, i) => {
+                const label = tournamentCourtLabels[i] ?? `T${i + 1}`;
+                const [sideA, sideB] = court;
+                return (
+                  <div
+                    key={label}
+                    className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3"
+                  >
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-emerald-200/90">
+                      Court {label}
+                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1 rounded-lg border border-emerald-500/20 bg-slate-800/50 px-2.5 py-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">Side A</span>
+                        <span className="text-sm font-medium text-slate-100">{sideA[0]} & {sideA[1]}</span>
+                      </div>
+                      <span className="hidden shrink-0 text-slate-500 sm:inline">vs</span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-1 rounded-lg border border-emerald-500/20 bg-slate-800/50 px-2.5 py-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">Side B</span>
+                        <span className="text-sm font-medium text-slate-100">{sideB[0]} & {sideB[1]}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             {tournamentWaiting.length > 0 && (
               <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
@@ -197,31 +199,31 @@ function CourtsView({
               Social play courts
             </p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {socialCourtLabels.map((label, i) => (
-                <div
-                  key={label}
-                  className="rounded-xl border border-slate-600/50 bg-slate-800/30 p-3"
-                >
-                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-200/90">
-                    Court {label}
-                  </p>
-                  <ul className="space-y-1.5">
-                    {socialCourts[i]?.map((player) => (
-                      <PlayerRow
-                        key={player}
-                        player={player}
-                        from="social"
-                        badge={socialBadge}
-                      />
-                    ))}
-                    {(!socialCourts[i] || socialCourts[i].length === 0) && (
-                      <li className="rounded-lg border border-dashed border-slate-600/60 px-2.5 py-1.5 text-[11px] text-slate-500">
-                        Empty
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              ))}
+              {socialCourts.map((court, i) => {
+                const label = socialCourtLabels[i] ?? `S${i + 1}`;
+                const [sideA, sideB] = court;
+                return (
+                  <div
+                    key={label}
+                    className="rounded-xl border border-slate-600/50 bg-slate-800/30 p-3"
+                  >
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-200/90">
+                      Court {label}
+                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1 rounded-lg border border-slate-600/50 bg-slate-800/50 px-2.5 py-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Side A</span>
+                        <span className="text-sm font-medium text-slate-100">{sideA[0]} & {sideA[1]}</span>
+                      </div>
+                      <span className="hidden shrink-0 text-slate-500 sm:inline">vs</span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-1 rounded-lg border border-slate-600/50 bg-slate-800/50 px-2.5 py-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Side B</span>
+                        <span className="text-sm font-medium text-slate-100">{sideB[0]} & {sideB[1]}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             {socialWaiting.length > 0 && (
               <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
@@ -475,13 +477,15 @@ function PairingView({
           )}
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onViewCourts}
-        className="w-full rounded-xl border border-emerald-400/60 bg-emerald-500/10 py-3 text-sm font-semibold text-emerald-100 shadow-[0_0_24px_rgba(34,197,94,0.4)] transition hover:border-emerald-300 hover:bg-emerald-500/20"
-      >
-        View courts →
-      </button>
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={onViewCourts}
+          className="w-full rounded-xl border border-amber-400/60 bg-amber-500/15 py-3 text-sm font-semibold text-amber-100 shadow-[0_0_24px_rgba(245,158,11,0.35)] transition hover:border-amber-300 hover:bg-amber-500/25"
+        >
+          Continue to the courts stage →
+        </button>
+      )}
     </div>
   );
 }
@@ -831,69 +835,63 @@ export default function Home() {
     syncStateToServer(tournamentPlayers, socialPlayers, playMode, "courts", true);
   }
 
-  // Proportional court split: 5 courts between tournament and social by headcount
+  // Court assignment by pairs: each court = 2 pairs (side A vs side B). Proportional split of 5 courts.
   function getCourtAssignment(): {
-    tournamentCourts: string[][];
-    socialCourts: string[][];
+    tournamentCourts: [[string, string], [string, string]][];
+    socialCourts: [[string, string], [string, string]][];
     tournamentWaiting: string[];
     socialWaiting: string[];
     tournamentCourtLabels: string[];
     socialCourtLabels: string[];
   } {
-    const totalT = tournamentPlayers.length;
-    const totalS = socialPlayers.length;
-    const total = totalT + totalS;
-    if (total === 0) {
+    const pairT = pairs.tournament;
+    const pairS = pairs.social;
+    const totalPairs = pairT.length + pairS.length;
+    const pairedT = new Set(pairT.flat());
+    const pairedS = new Set(pairS.flat());
+    const tournamentWaiting = tournamentPlayers.filter((p) => !pairedT.has(p));
+    const socialWaiting = socialPlayers.filter((p) => !pairedS.has(p));
+
+    if (totalPairs === 0) {
       return {
         tournamentCourts: [],
         socialCourts: [],
-        tournamentWaiting: [],
-        socialWaiting: [],
+        tournamentWaiting,
+        socialWaiting,
         tournamentCourtLabels: [],
         socialCourtLabels: [],
       };
     }
     let courtCountT: number;
     let courtCountS: number;
-    if (totalT === 0) {
+    if (pairT.length === 0) {
       courtCountT = 0;
-      courtCountS = 5;
-    } else if (totalS === 0) {
-      courtCountT = 5;
+      courtCountS = Math.min(5, Math.ceil(pairS.length / 2));
+    } else if (pairS.length === 0) {
+      courtCountT = Math.min(5, Math.ceil(pairT.length / 2));
       courtCountS = 0;
     } else {
-      courtCountT = Math.round((5 * totalT) / total);
+      courtCountT = Math.round((5 * pairT.length) / totalPairs);
       courtCountS = 5 - courtCountT;
-      if (courtCountT === 0 && totalT > 0) {
-        courtCountT = 1;
-        courtCountS = 4;
-      }
-      if (courtCountS === 0 && totalS > 0) {
-        courtCountS = 1;
-        courtCountT = 4;
-      }
+      if (courtCountT === 0) courtCountT = 1;
+      if (courtCountS === 0) courtCountS = 1;
+      courtCountT = Math.min(courtCountT, Math.ceil(pairT.length / 2));
+      courtCountS = Math.min(courtCountS, Math.ceil(pairS.length / 2));
     }
     const tournamentCourtLabels = COURT_NAMES.slice(0, courtCountT);
-    const socialCourtLabels = COURT_NAMES.slice(courtCountT, 5);
-    const tournamentCourts: string[][] = [];
+    const socialCourtLabels = COURT_NAMES.slice(courtCountT, courtCountT + courtCountS);
+    const tournamentCourts: [[string, string], [string, string]][] = [];
     for (let i = 0; i < courtCountT; i++) {
-      tournamentCourts.push(
-        tournamentPlayers.slice(
-          i * MAX_PER_COURT,
-          (i + 1) * MAX_PER_COURT,
-        ),
-      );
+      const p1 = pairT[i * 2];
+      const p2 = pairT[i * 2 + 1];
+      if (p1 && p2) tournamentCourts.push([p1, p2]);
     }
-    const tournamentWaiting = tournamentPlayers.slice(
-      courtCountT * MAX_PER_COURT,
-    );
-    const socialCourts: string[][] = [];
+    const socialCourts: [[string, string], [string, string]][] = [];
     for (let i = 0; i < courtCountS; i++) {
-      socialCourts.push(
-        socialPlayers.slice(i * MAX_PER_COURT, (i + 1) * MAX_PER_COURT),
-      );
+      const p1 = pairS[i * 2];
+      const p2 = pairS[i * 2 + 1];
+      if (p1 && p2) socialCourts.push([p1, p2]);
     }
-    const socialWaiting = socialPlayers.slice(courtCountS * MAX_PER_COURT);
     return {
       tournamentCourts,
       socialCourts,
