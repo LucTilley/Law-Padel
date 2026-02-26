@@ -504,6 +504,7 @@ export default function Home() {
   const [pairs, setPairsState] = useState<PairsData>(() =>
     loadPairsFromStorage(),
   );
+  const [stateVersion, setStateVersion] = useState(0);
 
   // Intro timing
   useEffect(() => {
@@ -644,7 +645,7 @@ export default function Home() {
       nextStage: Stage = stage,
     ) => {
       try {
-        await fetch("/api/state", {
+        const res = await fetch("/api/state", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -654,6 +655,12 @@ export default function Home() {
             stage: nextStage,
           }),
         });
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.version === "number") {
+            setStateVersion(data.version);
+          }
+        }
       } catch {
         // ignore network errors; local state still works
       }
@@ -668,6 +675,7 @@ export default function Home() {
         const res = await fetch("/api/state");
         if (!res.ok) return;
         const data = await res.json();
+        if (typeof data.version !== "number" || data.version <= 0) return;
         const nextTournament = Array.isArray(data.tournamentPlayers)
           ? data.tournamentPlayers.filter((p: unknown) => typeof p === "string")
           : [];
@@ -691,6 +699,7 @@ export default function Home() {
           if (nextStage === "pairing" || nextStage === "courts") {
             setStep(3);
           }
+          setStateVersion(data.version);
         }
       } catch {
         // fall back to local state
@@ -705,6 +714,8 @@ export default function Home() {
         const res = await fetch("/api/state");
         if (!res.ok) return;
         const data = await res.json();
+        if (typeof data.version !== "number" || data.version <= stateVersion)
+          return;
         const nextTournament = Array.isArray(data.tournamentPlayers)
           ? data.tournamentPlayers.filter((p: unknown) => typeof p === "string")
           : [];
@@ -724,6 +735,7 @@ export default function Home() {
         } else if (nextStage === "names" && step > 2) {
           setStep(2);
         }
+        setStateVersion(data.version);
       } catch {
         // ignore
       }

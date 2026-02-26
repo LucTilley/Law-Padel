@@ -5,6 +5,7 @@ export type GlobalState = {
   socialPlayers: string[];
   playMode: "tournament" | "social" | null;
   stage: "names" | "pairing" | "courts";
+  version: number;
 };
 
 let state: GlobalState = {
@@ -12,6 +13,7 @@ let state: GlobalState = {
   socialPlayers: [],
   playMode: null,
   stage: "names",
+  version: 0,
 };
 
 export async function GET() {
@@ -38,6 +40,7 @@ export async function POST(request: Request) {
         body.stage === "courts"
           ? body.stage
           : "names",
+      version: state.version + 1,
     };
     return NextResponse.json(state);
   } catch {
@@ -47,4 +50,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
 
