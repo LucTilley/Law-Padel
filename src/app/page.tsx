@@ -635,21 +635,124 @@ export default function Home() {
     }).catch(() => {});
   }, []);
 
+  // Helper to push shared state (players, play mode, stage) to the server
+  const syncStateToServer = useCallback(
+    async (
+      nextTournament: string[] = tournamentPlayers,
+      nextSocial: string[] = socialPlayers,
+      nextPlayMode: "tournament" | "social" | null = playMode,
+      nextStage: Stage = stage,
+    ) => {
+      try {
+        await fetch("/api/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tournamentPlayers: nextTournament,
+            socialPlayers: nextSocial,
+            playMode: nextPlayMode,
+            stage: nextStage,
+          }),
+        });
+      } catch {
+        // ignore network errors; local state still works
+      }
+    },
+    [tournamentPlayers, socialPlayers, playMode, stage],
+  );
+
+  // Load shared state from server so everyone sees the same names + stage
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/state");
+        if (!res.ok) return;
+        const data = await res.json();
+        const nextTournament = Array.isArray(data.tournamentPlayers)
+          ? data.tournamentPlayers.filter((p: unknown) => typeof p === "string")
+          : [];
+        const nextSocial = Array.isArray(data.socialPlayers)
+          ? data.socialPlayers.filter((p: unknown) => typeof p === "string")
+          : [];
+        const nextPlayMode =
+          data.playMode === "tournament" || data.playMode === "social"
+            ? data.playMode
+            : null;
+        const nextStage: Stage =
+          data.stage === "pairing" || data.stage === "courts"
+            ? data.stage
+            : "names";
+
+        if (nextTournament.length || nextSocial.length || nextPlayMode || nextStage !== "names") {
+          setTournamentPlayers(nextTournament);
+          setSocialPlayers(nextSocial);
+          setPlayMode(nextPlayMode);
+          setStage(nextStage);
+          if (nextStage === "pairing" || nextStage === "courts") {
+            setStep(3);
+          }
+        }
+      } catch {
+        // fall back to local state
+      }
+    })();
+  }, []);
+
+  // Poll shared state occasionally so everyone sees updates (names + stage)
+  useEffect(() => {
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch("/api/state");
+        if (!res.ok) return;
+        const data = await res.json();
+        const nextTournament = Array.isArray(data.tournamentPlayers)
+          ? data.tournamentPlayers.filter((p: unknown) => typeof p === "string")
+          : [];
+        const nextSocial = Array.isArray(data.socialPlayers)
+          ? data.socialPlayers.filter((p: unknown) => typeof p === "string")
+          : [];
+        const nextStage: Stage =
+          data.stage === "pairing" || data.stage === "courts"
+            ? data.stage
+            : "names";
+
+        setTournamentPlayers(nextTournament);
+        setSocialPlayers(nextSocial);
+        setStage(nextStage);
+        if (nextStage === "pairing" || nextStage === "courts") {
+          setStep(3);
+        } else if (nextStage === "names" && step > 2) {
+          setStep(2);
+        }
+      } catch {
+        // ignore
+      }
+    }, 3000);
+
+    return () => clearInterval(id);
+  }, [step]);
+
   function handleAddPlayer() {
     const trimmed = name.trim();
     if (!trimmed || !playMode) return;
 
+    let nextTournament = tournamentPlayers;
+    let nextSocial = socialPlayers;
+
     if (playMode === "tournament") {
-      setTournamentPlayers((prev) =>
-        prev.includes(trimmed) ? prev : [...prev, trimmed],
-      );
+      if (!tournamentPlayers.includes(trimmed)) {
+        nextTournament = [...tournamentPlayers, trimmed];
+        setTournamentPlayers(nextTournament);
+      }
     } else {
-      setSocialPlayers((prev) =>
-        prev.includes(trimmed) ? prev : [...prev, trimmed],
-      );
+      if (!socialPlayers.includes(trimmed)) {
+        nextSocial = [...socialPlayers, trimmed];
+        setSocialPlayers(nextSocial);
+      }
     }
 
     setName("");
+    syncStateToServer(nextTournament, nextSocial, playMode, stage);
   }
 
   function handleSportsSecSubmit(e: React.FormEvent) {
@@ -666,11 +769,16 @@ export default function Home() {
 
   function removePlayer(player: string, from: "tournament" | "social") {
     if (!isAdmin) return;
+    let nextTournament = tournamentPlayers;
+    let nextSocial = socialPlayers;
     if (from === "tournament") {
-      setTournamentPlayers((prev) => prev.filter((p) => p !== player));
+      nextTournament = tournamentPlayers.filter((p) => p !== player);
+      setTournamentPlayers(nextTournament);
     } else {
-      setSocialPlayers((prev) => prev.filter((p) => p !== player));
+      nextSocial = socialPlayers.filter((p) => p !== player);
+      setSocialPlayers(nextSocial);
     }
+    syncStateToServer(nextTournament, nextSocial, playMode, stage);
   }
 
   function movePlayer(
@@ -679,25 +787,34 @@ export default function Home() {
     to: "tournament" | "social",
   ) {
     if (!isAdmin || from === to) return;
+    let nextTournament = tournamentPlayers;
+    let nextSocial = socialPlayers;
     if (from === "tournament") {
-      setTournamentPlayers((prev) => prev.filter((p) => p !== player));
-      setSocialPlayers((prev) => (prev.includes(player) ? prev : [...prev, player]));
+      nextTournament = tournamentPlayers.filter((p) => p !== player);
+      if (!socialPlayers.includes(player)) {
+        nextSocial = [...socialPlayers, player];
+      }
     } else {
-      setSocialPlayers((prev) => prev.filter((p) => p !== player));
-      setTournamentPlayers((prev) =>
-        prev.includes(player) ? prev : [...prev, player],
-      );
+      nextSocial = socialPlayers.filter((p) => p !== player);
+      if (!tournamentPlayers.includes(player)) {
+        nextTournament = [...tournamentPlayers, player];
+      }
     }
+    setTournamentPlayers(nextTournament);
+    setSocialPlayers(nextSocial);
+    syncStateToServer(nextTournament, nextSocial, playMode, stage);
   }
 
   function continueToNextStage() {
     if (!isAdmin) return;
     setStage("pairing");
     setStep(3);
+    syncStateToServer(tournamentPlayers, socialPlayers, playMode, "pairing");
   }
 
   function goToCourtsView() {
     setStage("courts");
+    syncStateToServer(tournamentPlayers, socialPlayers, playMode, "courts");
   }
 
   // Proportional court split: 5 courts between tournament and social by headcount
