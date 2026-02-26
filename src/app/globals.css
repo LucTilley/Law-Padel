@@ -30,4 +30,12 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  /* Smoother scrolling for long lists; prevents scroll chaining and improves touch */
+  .scroll-smooth-area {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
 }

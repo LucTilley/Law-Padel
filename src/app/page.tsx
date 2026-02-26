@@ -322,7 +322,7 @@ function PairingView({
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/85">
             Tournament players
           </p>
-          <ul className="mb-3 max-h-32 space-y-1 overflow-y-auto rounded-lg border border-slate-700/50 bg-slate-900/50 p-2">
+          <ul className="scroll-smooth-area mb-3 max-h-48 space-y-1 rounded-lg border border-slate-700/50 bg-slate-900/50 p-2">
             {tournamentPlayers.length === 0 ? (
               <li className="text-[11px] text-slate-500">No tournament players</li>
             ) : (
@@ -401,7 +401,7 @@ function PairingView({
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300/85">
             Social play players
           </p>
-          <ul className="mb-3 max-h-32 space-y-1 overflow-y-auto rounded-lg border border-slate-700/50 bg-slate-900/50 p-2">
+          <ul className="scroll-smooth-area mb-3 max-h-48 space-y-1 rounded-lg border border-slate-700/50 bg-slate-900/50 p-2">
             {socialPlayers.length === 0 ? (
               <li className="text-[11px] text-slate-500">No social players</li>
             ) : (
@@ -636,24 +636,26 @@ export default function Home() {
     }).catch(() => {});
   }, []);
 
-  // Helper to push shared state (players, play mode, stage) to the server
+  // Push shared state to the server. Set includeStage true only when admin advances (pairing/courts); otherwise adding a name would overwrite stage and pull others back to name input.
   const syncStateToServer = useCallback(
     async (
       nextTournament: string[] = tournamentPlayers,
       nextSocial: string[] = socialPlayers,
       nextPlayMode: "tournament" | "social" | null = playMode,
       nextStage: Stage = stage,
+      includeStage = false,
     ) => {
       try {
+        const body: Record<string, unknown> = {
+          tournamentPlayers: nextTournament,
+          socialPlayers: nextSocial,
+          playMode: nextPlayMode,
+        };
+        if (includeStage) body.stage = nextStage;
         const res = await fetch("/api/state", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tournamentPlayers: nextTournament,
-            socialPlayers: nextSocial,
-            playMode: nextPlayMode,
-            stage: nextStage,
-          }),
+          body: JSON.stringify(body),
         });
         if (res.ok) {
           const data = await res.json();
@@ -764,7 +766,7 @@ export default function Home() {
     }
 
     setName("");
-    syncStateToServer(nextTournament, nextSocial, playMode, stage);
+    syncStateToServer(nextTournament, nextSocial, playMode, stage, false);
   }
 
   function handleSportsSecSubmit(e: React.FormEvent) {
@@ -790,7 +792,7 @@ export default function Home() {
       nextSocial = socialPlayers.filter((p) => p !== player);
       setSocialPlayers(nextSocial);
     }
-    syncStateToServer(nextTournament, nextSocial, playMode, stage);
+    syncStateToServer(nextTournament, nextSocial, playMode, stage, false);
   }
 
   function movePlayer(
@@ -814,19 +816,19 @@ export default function Home() {
     }
     setTournamentPlayers(nextTournament);
     setSocialPlayers(nextSocial);
-    syncStateToServer(nextTournament, nextSocial, playMode, stage);
+    syncStateToServer(nextTournament, nextSocial, playMode, stage, false);
   }
 
   function continueToNextStage() {
     if (!isAdmin) return;
     setStage("pairing");
     setStep(3);
-    syncStateToServer(tournamentPlayers, socialPlayers, playMode, "pairing");
+    syncStateToServer(tournamentPlayers, socialPlayers, playMode, "pairing", true);
   }
 
   function goToCourtsView() {
     setStage("courts");
-    syncStateToServer(tournamentPlayers, socialPlayers, playMode, "courts");
+    syncStateToServer(tournamentPlayers, socialPlayers, playMode, "courts", true);
   }
 
   // Proportional court split: 5 courts between tournament and social by headcount
@@ -1138,7 +1140,7 @@ export default function Home() {
                   step === 3
                     ? "translate-y-0 opacity-100"
                     : "pointer-events-none translate-y-8 opacity-0"
-                } ${stage === "courts" || stage === "pairing" ? "max-h-[72vh] overflow-y-auto" : ""}`}
+                } max-h-[78vh] scroll-smooth-area`}
               >
                 {stage === "names" ? (
                   <div className="space-y-4">
