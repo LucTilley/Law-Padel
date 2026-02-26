@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 
 const PAIRS_STORAGE_KEY = "lawx-padel-pairs";
 
@@ -652,6 +652,7 @@ export default function Home() {
     loadPairsFromStorage(),
   );
   const [stateVersion, setStateVersion] = useState(0);
+  const stateVersionRef = useRef(0);
   const [showPointsRuleModal, setShowPointsRuleModal] = useState(false);
   const [showScoresPage, setShowScoresPage] = useState(false);
   const [scoresData, setScoresData] = useState<{ points: Record<string, number>; matches: unknown[] }>({ points: {}, matches: [] });
@@ -755,9 +756,9 @@ export default function Home() {
     })();
   }, []);
 
-  // When on pairing view, poll so everyone sees updates
+  // When on pairing or courts view, poll pairs so everyone sees the same pairs and courts
   useEffect(() => {
-    if (stage !== "pairing") return;
+    if (stage !== "pairing" && stage !== "courts") return;
     const t = setInterval(async () => {
       try {
         const res = await fetch("/api/pairs");
@@ -811,6 +812,7 @@ export default function Home() {
           const data = await res.json();
           if (typeof data.version === "number") {
             setStateVersion(data.version);
+            stateVersionRef.current = data.version;
           }
         }
       } catch {
@@ -851,29 +853,35 @@ export default function Home() {
           if (nextStage === "pairing" || nextStage === "courts") {
             setStep(3);
           }
-          setStateVersion(data.version);
         }
+        setStateVersion(data.version);
+        stateVersionRef.current = data.version;
       } catch {
         // fall back to local state
       }
     })();
   }, []);
 
-  // Poll shared state occasionally so everyone sees updates (names + stage)
+  // Poll shared state so everyone sees the same names, playMode, and stage (use ref to avoid stale closure)
   useEffect(() => {
     const id = setInterval(async () => {
       try {
         const res = await fetch("/api/state");
         if (!res.ok) return;
         const data = await res.json();
-        if (typeof data.version !== "number" || data.version <= stateVersion)
-          return;
+        const serverVersion = typeof data.version === "number" ? data.version : 0;
+        if (serverVersion <= stateVersionRef.current) return;
+
         const nextTournament = Array.isArray(data.tournamentPlayers)
           ? data.tournamentPlayers.filter((p: unknown) => typeof p === "string")
           : [];
         const nextSocial = Array.isArray(data.socialPlayers)
           ? data.socialPlayers.filter((p: unknown) => typeof p === "string")
           : [];
+        const nextPlayMode =
+          data.playMode === "tournament" || data.playMode === "social"
+            ? data.playMode
+            : null;
         const nextStage: Stage =
           data.stage === "pairing" || data.stage === "courts"
             ? data.stage
@@ -881,20 +889,22 @@ export default function Home() {
 
         setTournamentPlayers(nextTournament);
         setSocialPlayers(nextSocial);
+        setPlayMode(nextPlayMode);
         setStage(nextStage);
         if (nextStage === "pairing" || nextStage === "courts") {
           setStep(3);
-        } else if (nextStage === "names" && step > 2) {
+        } else if (nextStage === "names") {
           setStep(2);
         }
-        setStateVersion(data.version);
+        setStateVersion(serverVersion);
+        stateVersionRef.current = serverVersion;
       } catch {
         // ignore
       }
     }, 3000);
 
     return () => clearInterval(id);
-  }, [step]);
+  }, []);
 
   function handleAddPlayer() {
     const trimmed = name.trim();
