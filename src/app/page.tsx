@@ -299,20 +299,6 @@ function PairingView({
     onPairsChange(next);
   }
 
-  function removePair(list: "tournament" | "social", pair: [string, string]) {
-    const next = { ...pairs };
-    if (list === "tournament") {
-      next.tournament = next.tournament.filter(
-        ([p, q]) => !(p === pair[0] && q === pair[1]),
-      );
-    } else {
-      next.social = next.social.filter(
-        ([p, q]) => !(p === pair[0] && q === pair[1]),
-      );
-    }
-    onPairsChange(next);
-  }
-
   return (
     <div className="space-y-4">
       <p className="text-[11px] text-slate-400">
@@ -372,25 +358,15 @@ function PairingView({
           {pairs.tournament.length > 0 && (
             <div>
               <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Pairs
+                Pairs (locked once created)
               </p>
               <ul className="space-y-1.5">
                 {pairs.tournament.map(([a, b]) => (
                   <li
                     key={`${a}-${b}`}
-                    className="flex items-center justify-between rounded-lg border border-slate-600/60 bg-slate-800/50 px-2.5 py-1.5 text-sm text-slate-100"
+                    className="rounded-lg border border-slate-600/60 bg-slate-800/50 px-2.5 py-1.5 text-sm text-slate-100"
                   >
-                    <span>{a} + {b}</span>
-                    <button
-                      type="button"
-                      onClick={() => removePair("tournament", [a, b])}
-                      className="rounded p-1 text-slate-400 hover:bg-red-500/20 hover:text-red-300"
-                      aria-label={`Unpair ${a} and ${b}`}
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                    {a} + {b}
                   </li>
                 ))}
               </ul>
@@ -451,25 +427,15 @@ function PairingView({
           {pairs.social.length > 0 && (
             <div>
               <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Pairs
+                Pairs (locked once created)
               </p>
               <ul className="space-y-1.5">
                 {pairs.social.map(([a, b]) => (
                   <li
                     key={`${a}-${b}`}
-                    className="flex items-center justify-between rounded-lg border border-slate-600/60 bg-slate-800/50 px-2.5 py-1.5 text-sm text-slate-100"
+                    className="rounded-lg border border-slate-600/60 bg-slate-800/50 px-2.5 py-1.5 text-sm text-slate-100"
                   >
-                    <span>{a} + {b}</span>
-                    <button
-                      type="button"
-                      onClick={() => removePair("social", [a, b])}
-                      className="rounded p-1 text-slate-400 hover:bg-red-500/20 hover:text-red-300"
-                      aria-label={`Unpair ${a} and ${b}`}
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                    {a} + {b}
                   </li>
                 ))}
               </ul>
@@ -486,6 +452,183 @@ function PairingView({
           Continue to the courts stage →
         </button>
       )}
+    </div>
+  );
+}
+
+function pairKey(pair: [string, string]): string {
+  const [a, b] = pair.map((s) => String(s).trim()).filter(Boolean);
+  return a && b ? [a, b].sort().join("|") : "";
+}
+
+function ScoresPageContent({
+  pairs,
+  scoresData,
+  setScoresData,
+  isAdmin,
+}: {
+  pairs: PairsData;
+  scoresData: { points: Record<string, number>; matches: unknown[] };
+  setScoresData: React.Dispatch<React.SetStateAction<{ points: Record<string, number>; matches: unknown[] }>>;
+  isAdmin: boolean;
+}) {
+  const allPairs: { key: string; label: string; pair: [string, string] }[] = [
+    ...pairs.tournament.map((p) => ({ key: pairKey(p), label: `${p[0]} & ${p[1]}`, pair: p })),
+    ...pairs.social.map((p) => ({ key: pairKey(p), label: `${p[0]} & ${p[1]}`, pair: p })),
+  ].filter((x) => x.key);
+  const [yourPairKey, setYourPairKey] = useState("");
+  const [opposingPairKey, setOpposingPairKey] = useState("");
+  const [winner, setWinner] = useState<"yours" | "theirs">("yours");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const yourPair = allPairs.find((x) => x.key === yourPairKey);
+  const opposingPair = allPairs.find((x) => x.key === opposingPairKey);
+
+  async function handleSubmitResult(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitError("");
+    if (!yourPair || !opposingPair || yourPairKey === opposingPairKey) {
+      setSubmitError("Select two different pairs.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/scores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pairA: yourPair.pair,
+          pairB: opposingPair.pair,
+          winner: winner === "yours" ? "A" : "B",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setSubmitError(err.error || "Failed to save result.");
+        return;
+      }
+      const data = await res.json();
+      setScoresData({ points: data.points ?? {}, matches: data.matches ?? [] });
+      setYourPairKey("");
+      setOpposingPairKey("");
+    } catch {
+      setSubmitError("Network error.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleAdminReset() {
+    if (!isAdmin) return;
+    try {
+      const res = await fetch("/api/scores", {
+        method: "DELETE",
+        headers: { "x-admin-reset": "lucella" },
+      });
+      if (res.ok) {
+        setScoresData({ points: {}, matches: [] });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const tableRows = Object.entries(scoresData.points)
+    .filter(([, pts]) => pts > 0)
+    .map(([key, pts]) => ({ key, label: key.split("|").join(" & "), pts }))
+    .sort((a, b) => b.pts - a.pts);
+
+  return (
+    <div className="mx-auto max-w-xl space-y-6">
+      <form onSubmit={handleSubmitResult} className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-cyan-200">Enter result</p>
+        <p className="mb-3 text-[11px] text-slate-400">Choose your pair, the pair you played against, and who won. The winning pair receives one point.</p>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-slate-400">Your pair</label>
+            <select
+              value={yourPairKey}
+              onChange={(e) => setYourPairKey(e.target.value)}
+              className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="">Select pair</option>
+              {allPairs.map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-slate-400">Opposing pair</label>
+            <select
+              value={opposingPairKey}
+              onChange={(e) => setOpposingPairKey(e.target.value)}
+              className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="">Select pair</option>
+              {allPairs.filter((p) => p.key !== yourPairKey).map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-slate-400">Who won?</label>
+            <select
+              value={winner}
+              onChange={(e) => setWinner(e.target.value as "yours" | "theirs")}
+              className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="yours">Your pair</option>
+              <option value="theirs">Opposing pair</option>
+            </select>
+          </div>
+          {submitError && <p className="text-xs text-red-400">{submitError}</p>}
+          <button
+            type="submit"
+            disabled={submitting || !yourPair || !opposingPair}
+            className="w-full rounded-xl bg-cyan-500/20 py-3 text-sm font-semibold text-cyan-100 ring-1 ring-cyan-400/40 disabled:opacity-50"
+          >
+            {submitting ? "Saving…" : "Submit result"}
+          </button>
+        </div>
+      </form>
+
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">Points table</p>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleAdminReset}
+              className="rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-300 hover:bg-red-500/20"
+            >
+              Reset all (admin)
+            </button>
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-700/80 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <th className="py-2 pr-4">Pair</th>
+                <th className="py-2 text-right">Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.length === 0 ? (
+                <tr><td colSpan={2} className="py-4 text-center text-slate-500">No results yet. Submit a result above.</td></tr>
+              ) : (
+                tableRows.map(({ key, label, pts }) => (
+                  <tr key={key} className="border-b border-slate-800/60">
+                    <td className="py-2.5 pr-4 font-medium text-slate-100">{label}</td>
+                    <td className="py-2.5 text-right font-semibold text-cyan-200">{pts}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -509,6 +652,9 @@ export default function Home() {
     loadPairsFromStorage(),
   );
   const [stateVersion, setStateVersion] = useState(0);
+  const [showPointsRuleModal, setShowPointsRuleModal] = useState(false);
+  const [showScoresPage, setShowScoresPage] = useState(false);
+  const [scoresData, setScoresData] = useState<{ points: Record<string, number>; matches: unknown[] }>({ points: {}, matches: [] });
 
   // Intro timing
   useEffect(() => {
@@ -936,11 +1082,26 @@ export default function Home() {
 
           {/* Top pill / meta + rules */}
           <div className="relative mb-6 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-300/80">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 shadow-[0_0_22px_rgba(16,185,129,0.5)]">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.9)]" />
-              <span className="font-semibold tracking-[0.18em] uppercase text-emerald-100">
-                Live Bracket
-              </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowScoresPage(true);
+                  fetch("/api/scores").then((r) => r.ok && r.json()).then((d) => d && setScoresData({ points: d.points ?? {}, matches: d.matches ?? [] })).catch(() => {});
+                }}
+                className="inline-flex items-center gap-2 rounded-full border border-cyan-400/50 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-medium text-cyan-100 shadow-[0_0_20px_rgba(34,211,238,0.4)] transition hover:border-cyan-300 hover:bg-cyan-500/20"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span className="uppercase tracking-[0.18em]">Scores</span>
+              </button>
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 shadow-[0_0_22px_rgba(16,185,129,0.5)]">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.9)]" />
+                <span className="font-semibold tracking-[0.18em] uppercase text-emerald-100">
+                  Live Bracket
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-3 text-[10px] text-slate-400">
               <button
@@ -1334,6 +1495,46 @@ export default function Home() {
         </div>
       </div>
 
+      {showScoresPage && (
+        <div className="fixed inset-0 z-20 flex flex-col bg-slate-950 text-slate-100">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-800/80 px-4 py-3">
+            <button
+              type="button"
+              onClick={() => setShowScoresPage(false)}
+              className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 hover:text-cyan-300"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+              Back
+            </button>
+            <h1 className="text-sm font-bold uppercase tracking-wider text-cyan-200">Scores</h1>
+            <div className="w-14" />
+          </div>
+          <div className="scroll-smooth-area flex-1 overflow-y-auto px-4 py-5">
+            <ScoresPageContent
+              pairs={pairs}
+              scoresData={scoresData}
+              setScoresData={setScoresData}
+              isAdmin={isAdmin}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Tournament Points Rule — bottom left, above Sports Sec */}
+      <button
+        type="button"
+        onClick={() => setShowPointsRuleModal(true)}
+        className="fixed bottom-20 left-5 z-10 flex items-center gap-2 rounded-xl border border-slate-600/80 bg-slate-900/90 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-300 shadow-lg backdrop-blur-sm transition hover:border-amber-500/50 hover:bg-slate-800/95 hover:text-amber-200"
+        aria-label="Tournament Points Rule"
+      >
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-700/80 text-slate-200">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </span>
+        Points Rule
+      </button>
+
       {/* Sports Sec — bottom left: click to open admin password; shows unlocked when admin */}
       <button
         type="button"
@@ -1362,6 +1563,24 @@ export default function Home() {
         </span>
         Sports Sec
       </button>
+
+      {showPointsRuleModal && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70 px-4" onClick={() => setShowPointsRuleModal(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-amber-500/40 bg-slate-950/95 p-6 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-amber-200">
+                Tournament Points Rule
+              </h2>
+              <button type="button" onClick={() => setShowPointsRuleModal(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200" aria-label="Close">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <p className="text-sm text-slate-200">
+              Rounds will be made up of the first three games. Each game scores like a tennis game (15, 30, 40, game). After the round has finished, enter the result on the <button type="button" className="font-semibold text-cyan-300 underline hover:text-cyan-200" onClick={() => { setShowPointsRuleModal(false); setShowScoresPage(true); fetch("/api/scores").then((r) => r.ok && r.json()).then((d) => d && setScoresData({ points: d.points ?? {}, matches: d.matches ?? [] })).catch(() => {}); }}>Scores</button> page.
+            </p>
+          </div>
+        </div>
+      )}
 
       {showSportsSecModal && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/70 px-4">
