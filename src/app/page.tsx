@@ -1336,7 +1336,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Sports Sec — bottom left: click to open admin password */}
+      {/* Sports Sec — bottom left: click to open admin password; shows unlocked when admin */}
       <button
         type="button"
         onClick={() => {
@@ -1344,13 +1344,23 @@ export default function Home() {
           setSportsSecError("");
           setSportsSecPassword("");
         }}
-        className="fixed bottom-5 left-5 z-10 flex items-center gap-2 rounded-xl border border-slate-600/80 bg-slate-900/90 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-300 shadow-lg backdrop-blur-sm transition hover:border-emerald-500/50 hover:bg-slate-800/95 hover:text-emerald-200"
-        aria-label="Sports Sec — admin access"
+        className={`fixed bottom-5 left-5 z-10 flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur-sm transition ${
+          isAdmin
+            ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400 hover:bg-emerald-500/20"
+            : "border-slate-600/80 bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 hover:bg-slate-800/95 hover:text-emerald-200"
+        }`}
+        aria-label={isAdmin ? "Sports Sec — admin (signed in)" : "Sports Sec — admin access"}
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-700/80 text-slate-200">
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
+        <span className={`flex h-8 w-8 items-center justify-center rounded-lg text-slate-200 ${isAdmin ? "bg-emerald-500/30" : "bg-slate-700/80"}`}>
+          {isAdmin ? (
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          )}
         </span>
         Sports Sec
       </button>
