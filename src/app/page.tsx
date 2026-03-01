@@ -34,223 +34,198 @@ function savePairsToStorage(pairs: PairsData) {
   }
 }
 
-const COURT_NAMES = ["C7", "C8", "C9", "C10", "C11"] as const;
-const MAX_PER_COURT = 4;
 const ADMIN_PASSWORD = "lucella";
 
-type CourtPair = [[string, string], [string, string]];
+type ScheduleMatch = { pairA: [string, string]; pairB: [string, string] };
+type Schedule = { tournament: ScheduleMatch[]; social: ScheduleMatch[] };
 
-function CourtsView({
-  tournamentPlayers,
-  socialPlayers,
-  getCourtAssignment,
-  isAdmin,
-  removePlayer,
-  movePlayer,
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function roundRobinMatches(pairs: [string, string][]): ScheduleMatch[] {
+  const out: ScheduleMatch[] = [];
+  for (let i = 0; i < pairs.length; i++) {
+    for (let j = i + 1; j < pairs.length; j++) {
+      out.push({ pairA: pairs[i], pairB: pairs[j] });
+    }
+  }
+  return shuffle(out);
+}
+
+function MatchesView({
+  schedule,
+  scoresData,
+  onRefreshScores,
   onBackToLineup,
 }: {
-  tournamentPlayers: string[];
-  socialPlayers: string[];
-  getCourtAssignment: () => {
-    tournamentCourts: CourtPair[];
-    socialCourts: CourtPair[];
-    tournamentWaiting: string[];
-    socialWaiting: string[];
-    tournamentCourtLabels: string[];
-    socialCourtLabels: string[];
-  };
-  isAdmin: boolean;
-  removePlayer: (player: string, from: "tournament" | "social") => void;
-  movePlayer: (player: string, from: "tournament" | "social", to: "tournament" | "social") => void;
+  schedule: Schedule;
+  scoresData: { points: Record<string, number>; matches: { pairA: string; pairB: string; winner: string }[] };
+  onRefreshScores: () => void;
   onBackToLineup: () => void;
 }) {
-  const {
-    tournamentCourts,
-    socialCourts,
-    tournamentWaiting,
-    socialWaiting,
-    tournamentCourtLabels,
-    socialCourtLabels,
-  } = getCourtAssignment();
+  const [gameToScore, setGameToScore] = useState<{ gameNum: number; pairA: [string, string]; pairB: [string, string] } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function PlayerRow({
-    player,
-    from,
-    badge,
-  }: {
-    player: string;
-    from: "tournament" | "social";
-    badge: React.ReactNode;
-  }) {
-    return (
-      <li className="flex items-center justify-between gap-2 rounded-lg border border-slate-700/60 bg-slate-900/50 px-2.5 py-1.5 text-sm text-slate-100">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          {badge}
-          <span className="truncate font-medium">{player}</span>
-        </div>
-        {isAdmin && (
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={() => movePlayer(player, from, from === "tournament" ? "social" : "tournament")}
-              className="rounded px-1.5 py-0.5 text-[10px] text-slate-400 hover:bg-slate-700/80 hover:text-slate-200"
-            >
-              {from === "tournament" ? "→ Social" : "→ Tourn."}
-            </button>
-            <button
-              type="button"
-              onClick={() => removePlayer(player, from)}
-              className="rounded p-0.5 text-slate-400 hover:bg-red-500/20 hover:text-red-300"
-              aria-label={`Remove ${player}`}
-            >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
-      </li>
+  const allGames: { gameNum: number; pairA: [string, string]; pairB: [string, string]; type: "tournament" | "social" }[] = [];
+  let num = 0;
+  schedule.tournament.forEach((m) => {
+    num++;
+    allGames.push({ gameNum: num, ...m, type: "tournament" });
+  });
+  schedule.social.forEach((m) => {
+    num++;
+    allGames.push({ gameNum: num, ...m, type: "social" });
+  });
+
+  function matchKey(pairA: [string, string], pairB: [string, string]) {
+    const k1 = pairA.slice().sort().join("|");
+    const k2 = pairB.slice().sort().join("|");
+    return k1 < k2 ? `${k1}|${k2}` : `${k2}|${k1}`;
+  }
+
+  function isMatchPlayed(pairA: [string, string], pairB: [string, string]) {
+    const keyA = pairA.slice().sort().join("|");
+    const keyB = pairB.slice().sort().join("|");
+    return (scoresData.matches as { pairA: string; pairB: string }[]).some(
+      (m) => (m.pairA === keyA && m.pairB === keyB) || (m.pairA === keyB && m.pairB === keyA)
     );
   }
 
-  const tournamentBadge = (
-    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/70 to-cyan-400/70 text-[10px] font-bold text-slate-950" />
-  );
-  const socialBadge = (
-    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-500/80 to-slate-300/80 text-[10px] font-bold text-slate-950" />
-  );
+  function getWinner(pairA: [string, string], pairB: [string, string]): string | null {
+    const keyA = pairA.slice().sort().join("|");
+    const keyB = pairB.slice().sort().join("|");
+    const match = (scoresData.matches as { pairA: string; pairB: string; winner: string }[]).find(
+      (m) => (m.pairA === keyA && m.pairB === keyB) || (m.pairA === keyB && m.pairB === keyA)
+    );
+    if (!match) return null;
+    const winnerKey = match.winner === "A" ? match.pairA : match.pairB;
+    return winnerKey.split("|").join(" & ");
+  }
+
+  async function submitScore(winner: "A" | "B") {
+    if (!gameToScore || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/scores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pairA: gameToScore.pairA,
+          pairB: gameToScore.pairB,
+          winner,
+        }),
+      });
+      if (res.ok) {
+        onRefreshScores();
+        setGameToScore(null);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={onBackToLineup}
-          className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 transition hover:text-emerald-300"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to lineup
-        </button>
-        <span className="rounded-full border border-slate-700/80 bg-slate-900/80 px-2.5 py-1 text-[11px] text-slate-400">
-          Courts: {COURT_NAMES.join(", ")}
-        </span>
-      </div>
+      <button
+        type="button"
+        onClick={onBackToLineup}
+        className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 transition hover:text-emerald-300"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to lineup
+      </button>
 
-      <div className="space-y-5">
-        {/* Tournament courts */}
-        {tournamentCourtLabels.length > 0 && (
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/85">
-              Tournament courts
+      <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200">
+        Upcoming matches
+      </h2>
+      <p className="text-[11px] text-slate-400">
+        Tap a game to enter the score. Each pair plays every other pair once.
+      </p>
+
+      {allGames.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/70 px-4 py-6 text-center text-xs text-slate-400">
+          No matches yet. An admin will generate the schedule when continuing from pairing.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {allGames.map((g) => {
+            const played = isMatchPlayed(g.pairA, g.pairB);
+            const winnerLabel = getWinner(g.pairA, g.pairB);
+            return (
+              <li key={`${g.gameNum}-${matchKey(g.pairA, g.pairB)}`}>
+                <button
+                  type="button"
+                  onClick={() => !played && setGameToScore({ gameNum: g.gameNum, pairA: g.pairA, pairB: g.pairB })}
+                  disabled={played}
+                  className={`w-full rounded-xl border px-3 py-3 text-left text-sm transition ${
+                    played
+                      ? "border-slate-700/60 bg-slate-800/40 text-slate-400"
+                      : "border-cyan-500/40 bg-cyan-500/10 text-slate-100 hover:border-cyan-400/60 hover:bg-cyan-500/20"
+                  }`}
+                >
+                  <span className="font-semibold text-slate-300">Game {g.gameNum}</span>
+                  <span className="mx-2 text-slate-500">·</span>
+                  <span>{g.pairA[0]} & {g.pairA[1]}</span>
+                  <span className="mx-2 text-slate-500">vs</span>
+                  <span>{g.pairB[0]} & {g.pairB[1]}</span>
+                  {played && winnerLabel && (
+                    <span className="ml-2 text-[11px] text-emerald-300/90">— Won: {winnerLabel}</span>
+                  )}
+                  {!played && <span className="ml-2 text-[11px] text-cyan-300/90">(Tap to enter score)</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {gameToScore && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4" onClick={() => !submitting && setGameToScore(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-cyan-500/40 bg-slate-950/95 p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-cyan-200">
+              Game {gameToScore.gameNum} — Who won?
             </p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {tournamentCourts.map((court, i) => {
-                const label = tournamentCourtLabels[i] ?? `T${i + 1}`;
-                const [sideA, sideB] = court;
-                return (
-                  <div
-                    key={label}
-                    className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3"
-                  >
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-emerald-200/90">
-                      Court {label}
-                    </p>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 flex-1 flex-col gap-1 rounded-lg border border-emerald-500/20 bg-slate-800/50 px-2.5 py-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">Side A</span>
-                        <span className="text-sm font-medium text-slate-100">{sideA[0]} & {sideA[1]}</span>
-                      </div>
-                      <span className="hidden shrink-0 text-slate-500 sm:inline">vs</span>
-                      <div className="flex min-w-0 flex-1 flex-col gap-1 rounded-lg border border-emerald-500/20 bg-slate-800/50 px-2.5 py-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">Side B</span>
-                        <span className="text-sm font-medium text-slate-100">{sideB[0]} & {sideB[1]}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {tournamentWaiting.length > 0 && (
-              <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-amber-200/90">
-                  Waiting for court (Tournament)
-                </p>
-                <ul className="space-y-1.5">
-                  {tournamentWaiting.map((player) => (
-                    <PlayerRow
-                      key={player}
-                      player={player}
-                      from="tournament"
-                      badge={tournamentBadge}
-                    />
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Social courts */}
-        {socialCourtLabels.length > 0 && (
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300/85">
-              Social play courts
+            <p className="mb-3 text-sm text-slate-300">
+              {gameToScore.pairA[0]} & {gameToScore.pairA[1]} vs {gameToScore.pairB[0]} & {gameToScore.pairB[1]}
             </p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {socialCourts.map((court, i) => {
-                const label = socialCourtLabels[i] ?? `S${i + 1}`;
-                const [sideA, sideB] = court;
-                return (
-                  <div
-                    key={label}
-                    className="rounded-xl border border-slate-600/50 bg-slate-800/30 p-3"
-                  >
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-200/90">
-                      Court {label}
-                    </p>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 flex-1 flex-col gap-1 rounded-lg border border-slate-600/50 bg-slate-800/50 px-2.5 py-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Side A</span>
-                        <span className="text-sm font-medium text-slate-100">{sideA[0]} & {sideA[1]}</span>
-                      </div>
-                      <span className="hidden shrink-0 text-slate-500 sm:inline">vs</span>
-                      <div className="flex min-w-0 flex-1 flex-col gap-1 rounded-lg border border-slate-600/50 bg-slate-800/50 px-2.5 py-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Side B</span>
-                        <span className="text-sm font-medium text-slate-100">{sideB[0]} & {sideB[1]}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => submitScore("A")}
+                disabled={submitting}
+                className="flex-1 rounded-xl bg-cyan-500/20 py-3 text-sm font-semibold text-cyan-100 ring-1 ring-cyan-400/40 disabled:opacity-50"
+              >
+                {gameToScore.pairA[0]} & {gameToScore.pairA[1]}
+              </button>
+              <button
+                type="button"
+                onClick={() => submitScore("B")}
+                disabled={submitting}
+                className="flex-1 rounded-xl bg-cyan-500/20 py-3 text-sm font-semibold text-cyan-100 ring-1 ring-cyan-400/40 disabled:opacity-50"
+              >
+                {gameToScore.pairB[0]} & {gameToScore.pairB[1]}
+              </button>
             </div>
-            {socialWaiting.length > 0 && (
-              <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-amber-200/90">
-                  Waiting for court (Social)
-                </p>
-                <ul className="space-y-1.5">
-                  {socialWaiting.map((player) => (
-                    <PlayerRow
-                      key={player}
-                      player={player}
-                      from="social"
-                      badge={socialBadge}
-                    />
-                  ))}
-                </ul>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => !submitting && setGameToScore(null)}
+              className="mt-3 w-full rounded-lg py-2 text-[11px] text-slate-400 hover:text-slate-200"
+            >
+              Cancel
+            </button>
           </div>
-        )}
-
-        {tournamentPlayers.length === 0 && socialPlayers.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-700/80 bg-slate-900/70 px-4 py-6 text-center text-xs text-slate-400">
-            No players. Go back and add names.
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -449,7 +424,7 @@ function PairingView({
           onClick={onViewCourts}
           className="w-full rounded-xl border border-amber-400/60 bg-amber-500/15 py-3 text-sm font-semibold text-amber-100 shadow-[0_0_24px_rgba(245,158,11,0.35)] transition hover:border-amber-300 hover:bg-amber-500/25"
         >
-          Continue to the courts stage →
+          Continue to matches →
         </button>
       )}
     </div>
@@ -462,63 +437,14 @@ function pairKey(pair: [string, string]): string {
 }
 
 function ScoresPageContent({
-  pairs,
   scoresData,
   setScoresData,
   isAdmin,
 }: {
-  pairs: PairsData;
   scoresData: { points: Record<string, number>; matches: unknown[] };
   setScoresData: React.Dispatch<React.SetStateAction<{ points: Record<string, number>; matches: unknown[] }>>;
   isAdmin: boolean;
 }) {
-  const allPairs: { key: string; label: string; pair: [string, string] }[] = [
-    ...pairs.tournament.map((p) => ({ key: pairKey(p), label: `${p[0]} & ${p[1]}`, pair: p })),
-    ...pairs.social.map((p) => ({ key: pairKey(p), label: `${p[0]} & ${p[1]}`, pair: p })),
-  ].filter((x) => x.key);
-  const [yourPairKey, setYourPairKey] = useState("");
-  const [opposingPairKey, setOpposingPairKey] = useState("");
-  const [winner, setWinner] = useState<"yours" | "theirs">("yours");
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
-
-  const yourPair = allPairs.find((x) => x.key === yourPairKey);
-  const opposingPair = allPairs.find((x) => x.key === opposingPairKey);
-
-  async function handleSubmitResult(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitError("");
-    if (!yourPair || !opposingPair || yourPairKey === opposingPairKey) {
-      setSubmitError("Select two different pairs.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/scores", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pairA: yourPair.pair,
-          pairB: opposingPair.pair,
-          winner: winner === "yours" ? "A" : "B",
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSubmitError(err.error || "Failed to save result.");
-        return;
-      }
-      const data = await res.json();
-      setScoresData({ points: data.points ?? {}, matches: data.matches ?? [] });
-      setYourPairKey("");
-      setOpposingPairKey("");
-    } catch {
-      setSubmitError("Network error.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   async function handleAdminReset() {
     if (!isAdmin) return;
     try {
@@ -540,62 +466,10 @@ function ScoresPageContent({
     .sort((a, b) => b.pts - a.pts);
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <form onSubmit={handleSubmitResult} className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-cyan-200">Enter result</p>
-        <p className="mb-3 text-[11px] text-slate-400">Choose your pair, the pair you played against, and who won. The winning pair receives one point.</p>
-        <div className="space-y-3">
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-slate-400">Your pair</label>
-            <select
-              value={yourPairKey}
-              onChange={(e) => setYourPairKey(e.target.value)}
-              className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
-            >
-              <option value="">Select pair</option>
-              {allPairs.map((p) => (
-                <option key={p.key} value={p.key}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-slate-400">Opposing pair</label>
-            <select
-              value={opposingPairKey}
-              onChange={(e) => setOpposingPairKey(e.target.value)}
-              className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
-            >
-              <option value="">Select pair</option>
-              {allPairs.filter((p) => p.key !== yourPairKey).map((p) => (
-                <option key={p.key} value={p.key}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-slate-400">Who won?</label>
-            <select
-              value={winner}
-              onChange={(e) => setWinner(e.target.value as "yours" | "theirs")}
-              className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
-            >
-              <option value="yours">Your pair</option>
-              <option value="theirs">Opposing pair</option>
-            </select>
-          </div>
-          {submitError && <p className="text-xs text-red-400">{submitError}</p>}
-          <button
-            type="submit"
-            disabled={submitting || !yourPair || !opposingPair}
-            className="w-full rounded-xl bg-cyan-500/20 py-3 text-sm font-semibold text-cyan-100 ring-1 ring-cyan-400/40 disabled:opacity-50"
-          >
-            {submitting ? "Saving…" : "Submit result"}
-          </button>
-        </div>
-      </form>
-
+    <div className="mx-auto max-w-xl">
       <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">Points table</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">Points (each pair)</p>
           {isAdmin && (
             <button
               type="button"
@@ -616,7 +490,7 @@ function ScoresPageContent({
             </thead>
             <tbody>
               {tableRows.length === 0 ? (
-                <tr><td colSpan={2} className="py-4 text-center text-slate-500">No results yet. Submit a result above.</td></tr>
+                <tr><td colSpan={2} className="py-4 text-center text-slate-500">No points yet. Enter scores on the matches page.</td></tr>
               ) : (
                 tableRows.map(({ key, label, pts }) => (
                   <tr key={key} className="border-b border-slate-800/60">
@@ -656,6 +530,7 @@ export default function Home() {
   const [showPointsRuleModal, setShowPointsRuleModal] = useState(false);
   const [showScoresPage, setShowScoresPage] = useState(false);
   const [scoresData, setScoresData] = useState<{ points: Record<string, number>; matches: unknown[] }>({ points: {}, matches: [] });
+  const [scheduleData, setScheduleData] = useState<Schedule>({ tournament: [], social: [] });
 
   // Intro timing
   useEffect(() => {
@@ -756,7 +631,7 @@ export default function Home() {
     })();
   }, []);
 
-  // When on pairing or courts view, poll pairs so everyone sees the same pairs and courts
+  // When on pairing or courts view, poll pairs so everyone sees the same pairs
   useEffect(() => {
     if (stage !== "pairing" && stage !== "courts") return;
     const t = setInterval(async () => {
@@ -769,6 +644,40 @@ export default function Home() {
               tournament: Array.isArray(data.tournament) ? data.tournament : [],
               social: Array.isArray(data.social) ? data.social : [],
             });
+        }
+      } catch {
+        // ignore
+      }
+    }, 3000);
+    return () => clearInterval(t);
+  }, [stage]);
+
+  // When on courts (matches) view, fetch and poll schedule
+  useEffect(() => {
+    if (stage !== "courts") return;
+    (async () => {
+      try {
+        const res = await fetch("/api/schedule");
+        if (res.ok) {
+          const data = await res.json();
+          setScheduleData({
+            tournament: Array.isArray(data.tournament) ? data.tournament : [],
+            social: Array.isArray(data.social) ? data.social : [],
+          });
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    const t = setInterval(async () => {
+      try {
+        const res = await fetch("/api/schedule");
+        if (res.ok) {
+          const data = await res.json();
+          setScheduleData({
+            tournament: Array.isArray(data.tournament) ? data.tournament : [],
+            social: Array.isArray(data.social) ? data.social : [],
+          });
         }
       } catch {
         // ignore
@@ -986,76 +895,24 @@ export default function Home() {
     syncStateToServer(tournamentPlayers, socialPlayers, playMode, "pairing", true);
   }
 
-  function goToCourtsView() {
+  async function goToCourtsView() {
     setStage("courts");
     syncStateToServer(tournamentPlayers, socialPlayers, playMode, "courts", true);
-  }
-
-  // Court assignment by pairs: each court = 2 pairs (side A vs side B). Proportional split of 5 courts.
-  function getCourtAssignment(): {
-    tournamentCourts: [[string, string], [string, string]][];
-    socialCourts: [[string, string], [string, string]][];
-    tournamentWaiting: string[];
-    socialWaiting: string[];
-    tournamentCourtLabels: string[];
-    socialCourtLabels: string[];
-  } {
-    const pairT = pairs.tournament;
-    const pairS = pairs.social;
-    const totalPairs = pairT.length + pairS.length;
-    const pairedT = new Set(pairT.flat());
-    const pairedS = new Set(pairS.flat());
-    const tournamentWaiting = tournamentPlayers.filter((p) => !pairedT.has(p));
-    const socialWaiting = socialPlayers.filter((p) => !pairedS.has(p));
-
-    if (totalPairs === 0) {
-      return {
-        tournamentCourts: [],
-        socialCourts: [],
-        tournamentWaiting,
-        socialWaiting,
-        tournamentCourtLabels: [],
-        socialCourtLabels: [],
-      };
+    const tournament = roundRobinMatches(pairs.tournament);
+    const social = roundRobinMatches(pairs.social);
+    setScheduleData({ tournament, social });
+    try {
+      await fetch("/api/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tournament: tournament.map((m) => [m.pairA, m.pairB]),
+          social: social.map((m) => [m.pairA, m.pairB]),
+        }),
+      });
+    } catch {
+      // ignore
     }
-    let courtCountT: number;
-    let courtCountS: number;
-    if (pairT.length === 0) {
-      courtCountT = 0;
-      courtCountS = Math.min(5, Math.ceil(pairS.length / 2));
-    } else if (pairS.length === 0) {
-      courtCountT = Math.min(5, Math.ceil(pairT.length / 2));
-      courtCountS = 0;
-    } else {
-      courtCountT = Math.round((5 * pairT.length) / totalPairs);
-      courtCountS = 5 - courtCountT;
-      if (courtCountT === 0) courtCountT = 1;
-      if (courtCountS === 0) courtCountS = 1;
-      courtCountT = Math.min(courtCountT, Math.ceil(pairT.length / 2));
-      courtCountS = Math.min(courtCountS, Math.ceil(pairS.length / 2));
-    }
-    const tournamentCourtLabels = COURT_NAMES.slice(0, courtCountT);
-    const socialCourtLabels = COURT_NAMES.slice(courtCountT, courtCountT + courtCountS);
-    const tournamentCourts: [[string, string], [string, string]][] = [];
-    for (let i = 0; i < courtCountT; i++) {
-      const p1 = pairT[i * 2];
-      const p2 = pairT[i * 2 + 1];
-      if (p1 && p2) tournamentCourts.push([p1, p2]);
-    }
-    const socialCourts: [[string, string], [string, string]][] = [];
-    for (let i = 0; i < courtCountS; i++) {
-      const p1 = pairS[i * 2];
-      const p2 = pairS[i * 2 + 1];
-      if (p1 && p2) socialCourts.push([p1, p2]);
-    }
-    return {
-      tournamentCourts,
-      socialCourts,
-      tournamentWaiting,
-      socialWaiting,
-      tournamentCourtLabels,
-      socialCourtLabels,
-    };
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -1489,13 +1346,15 @@ export default function Home() {
                     />
                   </div>
                 ) : (
-                  <CourtsView
-                    tournamentPlayers={tournamentPlayers}
-                    socialPlayers={socialPlayers}
-                    getCourtAssignment={getCourtAssignment}
-                    isAdmin={isAdmin}
-                    removePlayer={removePlayer}
-                    movePlayer={movePlayer}
+                  <MatchesView
+                    schedule={scheduleData}
+                    scoresData={scoresData as { points: Record<string, number>; matches: { pairA: string; pairB: string; winner: string }[] }}
+                    onRefreshScores={() =>
+                      fetch("/api/scores")
+                        .then((r) => r.ok && r.json())
+                        .then((d) => d && setScoresData({ points: d.points ?? {}, matches: d.matches ?? [] }))
+                        .catch(() => {})
+                    }
                     onBackToLineup={() => setStage("names")}
                   />
                 )}
@@ -1521,7 +1380,6 @@ export default function Home() {
           </div>
           <div className="scroll-smooth-area flex-1 overflow-y-auto px-4 py-5">
             <ScoresPageContent
-              pairs={pairs}
               scoresData={scoresData}
               setScoresData={setScoresData}
               isAdmin={isAdmin}
@@ -1586,7 +1444,7 @@ export default function Home() {
               </button>
             </div>
             <p className="text-sm text-slate-200">
-              Rounds will be made up of the first three games. Each game scores like a tennis game (15, 30, 40, game). After the round has finished, enter the result on the <button type="button" className="font-semibold text-cyan-300 underline hover:text-cyan-200" onClick={() => { setShowPointsRuleModal(false); setShowScoresPage(true); fetch("/api/scores").then((r) => r.ok && r.json()).then((d) => d && setScoresData({ points: d.points ?? {}, matches: d.matches ?? [] })).catch(() => {}); }}>Scores</button> page.
+              Rounds will be made up of the first three games. Each game scores like a tennis game (15, 30, 40, game). After the round, tap each game on the matches page to enter who won. View the points tally on the <button type="button" className="font-semibold text-cyan-300 underline hover:text-cyan-200" onClick={() => { setShowPointsRuleModal(false); setShowScoresPage(true); fetch("/api/scores").then((r) => r.ok && r.json()).then((d) => d && setScoresData({ points: d.points ?? {}, matches: d.matches ?? [] })).catch(() => {}); }}>Scores</button> page.
             </p>
           </div>
         </div>
