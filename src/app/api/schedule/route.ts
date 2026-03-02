@@ -26,7 +26,10 @@ function normMatch(m: unknown): ScheduleMatch | null {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    }
     const tournament: ScheduleMatch[] = Array.isArray(body.tournament)
       ? body.tournament.map((m: unknown) => normMatch(m)).filter((m: ScheduleMatch | null): m is ScheduleMatch => m !== null)
       : [];

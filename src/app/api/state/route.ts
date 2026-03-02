@@ -24,7 +24,10 @@ const MAX_PLAYERS_PER_LIST = 200;
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    }
     // Only update fields that are explicitly sent. Omitting stage keeps current stage (so adding a name doesn't pull others back to name input).
     if (Array.isArray(body.tournamentPlayers)) {
       state.tournamentPlayers = body.tournamentPlayers

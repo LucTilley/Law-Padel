@@ -37,7 +37,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    }
     store = {
       tournament: normalizePairsList(body.tournament),
       social: normalizePairsList(body.social),
