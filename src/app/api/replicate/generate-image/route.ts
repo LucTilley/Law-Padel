@@ -7,12 +7,22 @@ const replicate = new Replicate({
 
 export async function POST(request: Request) {
   if (!process.env.REPLICATE_API_TOKEN) {
-    throw new Error(
-      "The REPLICATE_API_TOKEN environment variable is not set. See README.md for instructions on how to set it."
+    return NextResponse.json(
+      { error: "REPLICATE_API_TOKEN is not configured" },
+      { status: 503 }
     );
   }
 
-  const { prompt } = await request.json();
+  let body: { prompt?: unknown };
+  try {
+    body = await request.json().catch(() => null) as { prompt?: unknown };
+  } catch {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+  const prompt = body.prompt != null ? String(body.prompt) : "";
 
   try {
     const output = await replicate.run(
