@@ -9,8 +9,10 @@ const MAX_PAIRS_PER_LIST = 100;
 
 function normalizePair(entry: unknown): [string, string] | null {
   if (!Array.isArray(entry) || entry.length < 2) return null;
-  const a = String(entry[0]).trim();
-  const b = String(entry[1]).trim();
+  const [e0, e1] = entry;
+  if (e0 == null || e1 == null) return null;
+  const a = String(e0).trim();
+  const b = String(e1).trim();
   if (!a || !b) return null;
   return [a, b];
 }
