@@ -612,18 +612,17 @@ export default function Home() {
     }
   }, [tournamentPlayers, socialPlayers, playMode, stage]);
 
-  // Sync pairs from server so all users see the same pairs
+  // Sync pairs from server so all users see the same pairs; don't overwrite with empty (avoids losing pairs on refresh after server restart)
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/pairs");
         if (res.ok) {
           const data = await res.json();
-          if (data && (Array.isArray(data.tournament) || Array.isArray(data.social)))
-            setPairsState({
-              tournament: Array.isArray(data.tournament) ? data.tournament : [],
-              social: Array.isArray(data.social) ? data.social : [],
-            });
+          const tournament = Array.isArray(data?.tournament) ? data.tournament : [];
+          const social = Array.isArray(data?.social) ? data.social : [];
+          if (tournament.length > 0 || social.length > 0)
+            setPairsState({ tournament, social });
         }
       } catch {
         // keep localStorage state
@@ -639,11 +638,10 @@ export default function Home() {
         const res = await fetch("/api/pairs");
         if (res.ok) {
           const data = await res.json();
-          if (data && (Array.isArray(data.tournament) || Array.isArray(data.social)))
-            setPairsState({
-              tournament: Array.isArray(data.tournament) ? data.tournament : [],
-              social: Array.isArray(data.social) ? data.social : [],
-            });
+          const tournament = Array.isArray(data?.tournament) ? data.tournament : [];
+          const social = Array.isArray(data?.social) ? data.social : [];
+          if (tournament.length > 0 || social.length > 0)
+            setPairsState({ tournament, social });
         }
       } catch {
         // ignore
